@@ -99,7 +99,7 @@ Arena Structure:
 
 ## 4. Symbol Table Architecture
 
-The symbol table (`src/symtab.h`, `src/symtab.c`) supports two simultaneous requirements:
+The symbol table (`src/symtab/symtab.h`, `src/symtab/symtab.c`) supports two simultaneous requirements:
 1. **Hierarchical Scope Tree**: Preserves structural containment and declaration order for nested configuration blocks and YAML/JSON serialization.
 2. **Chained Hash Map**: A 256-bucket hash table using the djb2 hash algorithm provides $O(1)$ lookup by canonical dot-path (e.g. `server.database.port`).
 
@@ -118,7 +118,7 @@ Each `symbol_t` contains:
 
 ## 5. Semantic Analysis & Cycle Detection
 
-Semantic analysis runs as Pass 2 over the symbol table and AST.
+Semantic analysis runs as Pass 2 over the symbol table and AST (`src/semantic/semantic.h`, `src/semantic/semantic.c`).
 
 ### 5.1 Reference Resolution Algorithm
 References take the form `@identifier` or `@block.sub_ident`.
@@ -140,7 +140,7 @@ To support forward references and arbitrary reference topology, ConfigLang track
 
 ## 6. Intermediate Representation: Three-Address Code (TAC)
 
-ConfigLang compiles high-level expressions into linear Three-Address Code quadruples (`src/tac.h`, `src/tac.c`).
+ConfigLang compiles high-level expressions into linear Three-Address Code quadruples (`src/tac/tac.h`, `src/tac/tac.c`).
 
 ### 6.1 Instruction Format
 ```
@@ -159,7 +159,7 @@ TAC instructions are emitted in topological dependency order. Independent consta
 
 ## 7. Optimizer Architecture
 
-The optimizer (`src/optimizer.h`, `src/optimizer.c`) executes iterative passes until a fixpoint is achieved:
+The optimizer (`src/optimizer/optimizer.h`, `src/optimizer/optimizer.c`) executes iterative passes until a fixpoint is achieved:
 
 1. **Constant Propagation**:
    - Maintains an in-memory mapping from temporary registers `tN` and variables to known evaluated literals (`val_literal_t`).
@@ -176,7 +176,7 @@ The optimizer (`src/optimizer.h`, `src/optimizer.c`) executes iterative passes u
 
 ## 8. Diagnostic Engine
 
-The diagnostic subsystem (`src/diag.h`, `src/diag.c`) strictly complies with the Clang / Rust compiler style specified in SRS §5.4:
+The diagnostic subsystem (`src/common/diag.h`, `src/common/diag.c`) strictly complies with the Clang / Rust compiler style specified in SRS §5.4:
 
 ```
 tests/invalid/val_range_exceeded.cfg:1:18: error[E303]: value 11 outside declared range [1..10] for 'p'

@@ -6,12 +6,15 @@ CC = gcc
 CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -g
 FLEX_CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -g -Wall -Wextra -Wno-sign-compare -Wno-unused-function -Wno-unused-parameter -Wno-conversion
 BISON_CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -g -Wall -Wextra -Wno-conversion -Wno-sign-compare
-INCLUDES = -Isrc -I$(BUILD_DIR) -I.
+INCLUDES = -Isrc -Isrc/common -Isrc/lexer -Isrc/parser -Isrc/ast -Isrc/symtab -Isrc/semantic -Isrc/tac -Isrc/optimizer -Isrc/validator -Isrc/codegen -I$(BUILD_DIR) -I.
 
 BUILD_DIR = build
 BIN = $(BUILD_DIR)/configlang
 
-SRCS = src/util.c src/arena.c src/diag.c src/ast.c src/symtab.c src/semantic.c src/tac.c src/optimizer.c src/validator.c src/codegen.c src/main.c
+SRCS = src/common/util.c src/common/arena.c src/common/diag.c \
+       src/ast/ast.c src/symtab/symtab.c src/semantic/semantic.c \
+       src/tac/tac.c src/optimizer/optimizer.c src/validator/validator.c \
+       src/codegen/codegen.c src/main.c
 OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS)) $(BUILD_DIR)/parser.o $(BUILD_DIR)/lexer.o
 
 .PHONY: all clean test memcheck demo directories
@@ -19,18 +22,20 @@ OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS)) $(BUILD_DIR)/parser.o $(BUIL
 all: directories $(BIN)
 
 directories:
-	@mkdir -p $(BUILD_DIR) tests/valid tests/invalid examples
+	@mkdir -p $(BUILD_DIR)/common $(BUILD_DIR)/ast $(BUILD_DIR)/symtab \
+	          $(BUILD_DIR)/semantic $(BUILD_DIR)/tac $(BUILD_DIR)/optimizer \
+	          $(BUILD_DIR)/validator $(BUILD_DIR)/codegen tests/valid tests/invalid examples
 
 $(BUILD_DIR)/%.o: src/%.c | directories
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/parser.c $(BUILD_DIR)/parser.h: src/parser.y | directories
-	bison -Wall -d -o $(BUILD_DIR)/parser.c src/parser.y
+$(BUILD_DIR)/parser.c $(BUILD_DIR)/parser.h: src/parser/parser.y | directories
+	bison -Wall -d -o $(BUILD_DIR)/parser.c src/parser/parser.y
 
 $(BUILD_DIR)/parser.o: $(BUILD_DIR)/parser.c | directories
 	$(CC) $(BISON_CFLAGS) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/lexer.c: src/lexer.l $(BUILD_DIR)/parser.h | directories
+$(BUILD_DIR)/lexer.c: src/lexer/lexer.l $(BUILD_DIR)/parser.h | directories
 	flex -o $@ $<
 
 $(BUILD_DIR)/lexer.o: $(BUILD_DIR)/lexer.c | directories

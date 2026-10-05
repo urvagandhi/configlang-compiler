@@ -169,15 +169,15 @@ graph TD
 
 | Course Module / Topic | Implementation in ConfigLang | Primary Source Files |
 |:---|:---|:---|
-| **Lexical Analysis (Scanner)** | Flex pure reentrant scanner, regular expressions, longest match, token buffering, string unescaping | [`src/lexer.l`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer.l), [`src/lexer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer.h) |
-| **Syntax Analysis (Parser)** | Bison LALR(1) parser, `%expect 0`, operator precedence declarations (`%left`, `%right`), panic-mode error recovery | [`src/parser.y`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser.y) |
-| **Syntax-Directed Translation (SDT)** | Semantic actions constructing tagged-union AST nodes in arena memory | [`src/ast.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/ast.c), [`src/ast.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/ast.h) |
-| **Symbol Tables & Scope Management** | Chained hash table ($O(1)$ lookup) + hierarchical scope tree preserving source declaration order | [`src/symtab.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab.c), [`src/symtab.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab.h) |
-| **Semantic Analysis & Type Systems** | Two-pass type checking, type inference, implicit widening, range constraint checks, DFS cycle detection | [`src/semantic.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic.c), [`src/semantic.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic.h) |
-| **Intermediate Code Generation** | Three-Address Code (TAC) representation with quadruples, topological dependency ordering | [`src/tac.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac.c), [`src/tac.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac.h) |
-| **Code Optimization** | Constant propagation, checked compile-time constant folding, dead code / dead temporary register elimination | [`src/optimizer.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer.c), [`src/optimizer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer.h) |
-| **Code Generation & Serialization** | Target language emission (JSON / YAML serializers) with proper string escaping and indentation | [`src/codegen.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen.c), [`src/codegen.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen.h) |
-| **Run-Time Environment & Storage** | Chunked arena memory allocator, safe string buffers, diagnostic error reporting engine | [`src/arena.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/arena.c), [`src/diag.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/diag.c), [`src/util.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/util.c) |
+| **Lexical Analysis (Scanner)** | Flex pure reentrant scanner, regular expressions, longest match, token buffering, string unescaping | [`src/lexer/lexer.l`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer/lexer.l), [`src/lexer/lexer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer/lexer.h) |
+| **Syntax Analysis (Parser)** | Bison LALR(1) parser, `%expect 0`, operator precedence declarations (`%left`, `%right`), panic-mode error recovery | [`src/parser/parser.y`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser/parser.y), [`src/parser/parser.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser/parser.h) |
+| **Syntax-Directed Translation (SDT)** | Semantic actions constructing tagged-union AST nodes in arena memory | [`src/ast/ast.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/ast/ast.c), [`src/ast/ast.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/ast/ast.h) |
+| **Symbol Tables & Scope Management** | Chained hash table ($O(1)$ lookup) + hierarchical scope tree preserving source declaration order | [`src/symtab/symtab.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab/symtab.c), [`src/symtab/symtab.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab/symtab.h) |
+| **Semantic Analysis & Type Systems** | Two-pass type checking, type inference, implicit widening, range constraint checks, DFS cycle detection | [`src/semantic/semantic.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic/semantic.c), [`src/semantic/semantic.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic/semantic.h) |
+| **Intermediate Code Generation** | Three-Address Code (TAC) representation with quadruples, topological dependency ordering | [`src/tac/tac.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac/tac.c), [`src/tac/tac.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac/tac.h) |
+| **Code Optimization** | Constant propagation, checked compile-time constant folding, dead code / dead temporary register elimination | [`src/optimizer/optimizer.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer/optimizer.c), [`src/optimizer/optimizer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer/optimizer.h) |
+| **Code Generation & Serialization** | Target language emission (JSON / YAML serializers) with proper string escaping and indentation | [`src/codegen/codegen.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen/codegen.c), [`src/codegen/codegen.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen/codegen.h) |
+| **Run-Time Environment & Storage** | Chunked arena memory allocator, safe string buffers, diagnostic error reporting engine | [`src/common/arena.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/common/arena.c), [`src/common/diag.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/common/diag.c), [`src/common/util.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/common/util.c) |
 
 ---
 
@@ -193,20 +193,30 @@ graph TD
 │   ├── TEST_PLAN.md         # Verification matrix and test traceability
 │   ├── VIVA_NOTES.md        # Comprehensive 25+ viva preparation Q&A guide
 │   └── DECISIONS.md         # Architecture Decision Records (ADRs)
-├── src/                     # C11 Compiler Source Code
+├── src/                     # C11 Compiler Source Code (Modular Pipeline Architecture)
 │   ├── main.c               # Compiler CLI driver & 8-phase pipeline orchestrator
-│   ├── arena.h, arena.c     # 8-byte aligned chunked arena allocator
-│   ├── util.h, util.c       # Safe allocation wrappers, dynamic string buffers, file loader
-│   ├── diag.h, diag.c       # Diagnostic reporting engine with ANSI carets & gutters
-│   ├── lexer.l, lexer.h     # Reentrant Flex lexical scanner
-│   ├── parser.y, parser.h   # Bison LALR(1) grammar specification
-│   ├── ast.h, ast.c         # Tagged-union AST node hierarchy & tree dumper
-│   ├── symtab.h, symtab.c   # Scope tree & chained hash symbol table
-│   ├── semantic.h, semantic.c# Two-pass semantic analyzer, type checker, cycle detector
-│   ├── tac.h, tac.c         # Three-Address Code generator & IR dumper
-│   ├── optimizer.h, optimizer.c # Constant propagation, constant folding, dead code elimination
-│   ├── validator.h, validator.c # Post-optimization range & finiteness validator
-│   └── codegen.h, codegen.c # JSON & YAML code generators
+│   ├── common/              # Common runtime infrastructure
+│   │   ├── arena.h, arena.c # 8-byte aligned chunked arena allocator
+│   │   ├── util.h, util.c   # Safe allocation wrappers, dynamic string buffers, file loader
+│   │   └── diag.h, diag.c   # Diagnostic reporting engine with ANSI carets & gutters
+│   ├── lexer/               # Phase 1: Lexical Analysis
+│   │   └── lexer.l, lexer.h # Reentrant Flex lexical scanner
+│   ├── parser/              # Phase 2: Syntax Analysis
+│   │   └── parser.y, parser.h# Bison LALR(1) grammar specification (%expect 0)
+│   ├── ast/                 # Phase 2 AST Construction
+│   │   └── ast.h, ast.c     # Tagged-union AST node hierarchy & tree dumper
+│   ├── symtab/              # Phase 3: Symbol Table Management
+│   │   └── symtab.h, symtab.c# Scope tree & chained hash symbol table
+│   ├── semantic/            # Phase 4: Semantic Analysis
+│   │   └── semantic.h, semantic.c# Two-pass type checking & DFS cycle detection
+│   ├── tac/                 # Phase 5: Intermediate Code Generation
+│   │   └── tac.h, tac.c     # Three-Address Code generator & IR dumper
+│   ├── optimizer/           # Phase 6: Code Optimization
+│   │   └── optimizer.h, optimizer.c # Constant propagation, folding & dead temp removal
+│   ├── validator/           # Phase 7: Range & Finiteness Validation
+│   │   └── validator.h, validator.c # Post-optimization range & float validator
+│   └── codegen/             # Phase 8: Target Code Generation
+│       └── codegen.h, codegen.c # Formatted JSON & YAML serializers
 ├── examples/                # Example configurations
 │   ├── server.cfg           # Comprehensive valid server configuration
 │   └── server.json          # Golden JSON output
