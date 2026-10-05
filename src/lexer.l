@@ -10,7 +10,13 @@
  */
 
 #define _POSIX_C_SOURCE 200809L
+#include "arena.h"
+#include "ast.h"
+#include "diag.h"
 #include "lexer.h"
+#include "build/parser.h"
+#define YYSTYPE CONFIGLANG_YYSTYPE
+#define YYLTYPE CONFIGLANG_YYLTYPE
 #include "util.h"
 #include <errno.h>
 #include <inttypes.h>
@@ -19,17 +25,17 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Forward declaration for helper function */
 static int handle_int_literal(const char *text, diag_loc_t loc,
-                             lexer_extra_t *extra, token_val_t *val);
+                             lexer_extra_t *extra, int64_t *out_val);
 
-/* Dynamic buffer used during string literal accumulation */
 static strbuf_t s_strbuf;
 static diag_loc_t s_str_start_loc;
 static diag_loc_t s_last_token_loc;
 
 #define YY_USER_ACTION do {                                      \
     lexer_extra_t *extra = yyextra;                              \
+    yylloc->first_line = (int)extra->cur_line;                   \
+    yylloc->first_column = (int)extra->cur_col;                  \
     s_last_token_loc.filename = extra->filename;                 \
     s_last_token_loc.line = extra->cur_line;                     \
     s_last_token_loc.col = extra->cur_col;                      \
@@ -42,12 +48,14 @@ static diag_loc_t s_last_token_loc;
             extra->cur_col++;                                    \
         }                                                        \
     }                                                            \
+    yylloc->last_line = (int)extra->cur_line;                    \
+    yylloc->last_column = (int)extra->cur_col;                   \
 } while (0);
 
 %}
 
 %option noyywrap nounput noinput
-%option reentrant
+%option reentrant bison-bridge bison-locations
 %option extra-type="lexer_extra_t *"
 %option prefix="configlang_yy"
 
@@ -90,7 +98,11 @@ WHITESPACE  [ \t\r]+
 <STR>{
     \"          {
                     BEGIN(INITIAL);
-                    return TOK_STRING_LIT;
+                    yylloc->first_line = (int)s_str_start_loc.line;
+                    yylloc->first_column = (int)s_str_start_loc.col;
+                    yylval->str = arena_strdup(yyextra->arena, s_strbuf.data);
+                    util_strbuf_destroy(&s_strbuf);
+                    return STRING_LIT;
                 }
     \n          {
                     diag_error(yyextra->diags, DIAG_E102, s_str_start_loc,
@@ -118,43 +130,54 @@ WHITESPACE  [ \t\r]+
     [^"\\\n]+   { util_strbuf_append(&s_strbuf, yytext); }
 }
 
-"int"           { return TOK_KW_INT; }
-"float"         { return TOK_KW_FLOAT; }
-"string"        { return TOK_KW_STRING; }
-"bool"          { return TOK_KW_BOOL; }
-"true"          { return TOK_KW_TRUE; }
-"false"         { return TOK_KW_FALSE; }
+"int"           { return KW_INT; }
+"float"         { return KW_FLOAT; }
+"string"        { return KW_STRING; }
+"bool"          { return KW_BOOL; }
+"true"          { return KW_TRUE; }
+"false"         { return KW_FALSE; }
 
-".."            { return TOK_DOTDOT; }
-"."             { return TOK_DOT; }
-"{"             { return TOK_LBRACE; }
-"}"             { return TOK_RBRACE; }
-"("             { return TOK_LPAREN; }
-")"             { return TOK_RPAREN; }
-"="             { return TOK_ASSIGN; }
-":"             { return TOK_COLON; }
-";"             { return TOK_SEMI; }
-"@"             { return TOK_AT; }
-"+"             { return TOK_PLUS; }
-"-"             { return TOK_MINUS; }
-"*"             { return TOK_STAR; }
-"/"             { return TOK_SLASH; }
+".."            { return DOTDOT; }
+"."             { return DOT; }
+"{"             { return LBRACE; }
+"}"             { return RBRACE; }
+"("             { return LPAREN; }
+")"             { return RPAREN; }
+"="             { return ASSIGN; }
+":"             { return COLON; }
+";"             { return SEMI; }
+"@"             { return AT; }
+"+"             { return PLUS; }
+"-"             { return MINUS; }
+"*"             { return STAR; }
+"/"             { return SLASH; }
 
-{FLOAT_LIT}     { return TOK_FLOAT_LIT; }
-{INT_LIT}       { return TOK_INT_LIT; }
-{IDENT}         { return TOK_IDENT; }
+{FLOAT_LIT}     {
+                    yylval->fval = strtod(yytext, NULL);
+                    return FLOAT_LIT;
+                }
+
+{INT_LIT}       {
+                    handle_int_literal(yytext, s_last_token_loc, yyextra, &yylval->ival);
+                    return INT_LIT;
+                }
+
+{IDENT}         {
+                    yylval->str = arena_strdup(yyextra->arena, yytext);
+                    return IDENT;
+                }
 
 .               {
                     diag_error(yyextra->diags, DIAG_E101, s_last_token_loc,
                                "illegal character '%c'", yytext[0]);
                 }
 
-<<EOF>>         { return TOK_EOF; }
+<<EOF>>         { return 0; }
 
 %%
 
 static int handle_int_literal(const char *text, diag_loc_t loc,
-                             lexer_extra_t *extra, token_val_t *val) {
+                             lexer_extra_t *extra, int64_t *out_val) {
     uint64_t acc = 0;
     bool overflow = false;
     for (size_t i = 0; text[i] != '\0'; ++i) {
@@ -171,41 +194,41 @@ static int handle_int_literal(const char *text, diag_loc_t loc,
     if (overflow) {
         diag_error(extra->diags, DIAG_E103, loc,
                    "integer literal '%s' out of range", text);
-        val->ival = 0;
+        *out_val = 0;
     } else {
-        val->ival = (int64_t)acc;
+        *out_val = (int64_t)acc;
     }
-    return TOK_INT_LIT;
+    return INT_LIT;
 }
 
-const char *lexer_token_name(token_kind_t kind) {
+const char *lexer_token_name(int kind) {
     switch (kind) {
-        case TOK_IDENT:      return "IDENT";
-        case TOK_STRING_LIT: return "STRING_LIT";
-        case TOK_INT_LIT:    return "INT_LIT";
-        case TOK_FLOAT_LIT:  return "FLOAT_LIT";
-        case TOK_KW_INT:     return "KW_INT";
-        case TOK_KW_FLOAT:   return "KW_FLOAT";
-        case TOK_KW_STRING:  return "KW_STRING";
-        case TOK_KW_BOOL:    return "KW_BOOL";
-        case TOK_KW_TRUE:    return "KW_TRUE";
-        case TOK_KW_FALSE:   return "KW_FALSE";
-        case TOK_LBRACE:     return "LBRACE";
-        case TOK_RBRACE:     return "RBRACE";
-        case TOK_LPAREN:     return "LPAREN";
-        case TOK_RPAREN:     return "RPAREN";
-        case TOK_ASSIGN:     return "ASSIGN";
-        case TOK_COLON:      return "COLON";
-        case TOK_SEMI:       return "SEMI";
-        case TOK_DOT:        return "DOT";
-        case TOK_DOTDOT:     return "DOTDOT";
-        case TOK_AT:         return "AT";
-        case TOK_PLUS:       return "PLUS";
-        case TOK_MINUS:      return "MINUS";
-        case TOK_STAR:       return "STAR";
-        case TOK_SLASH:      return "SLASH";
-        case TOK_EOF:        return "EOF";
-        default:             return "UNKNOWN";
+        case IDENT:      return "IDENT";
+        case STRING_LIT: return "STRING_LIT";
+        case INT_LIT:    return "INT_LIT";
+        case FLOAT_LIT:  return "FLOAT_LIT";
+        case KW_INT:     return "KW_INT";
+        case KW_FLOAT:   return "KW_FLOAT";
+        case KW_STRING:  return "KW_STRING";
+        case KW_BOOL:    return "KW_BOOL";
+        case KW_TRUE:    return "KW_TRUE";
+        case KW_FALSE:   return "KW_FALSE";
+        case LBRACE:     return "LBRACE";
+        case RBRACE:     return "RBRACE";
+        case LPAREN:     return "LPAREN";
+        case RPAREN:     return "RPAREN";
+        case ASSIGN:     return "ASSIGN";
+        case COLON:      return "COLON";
+        case SEMI:       return "SEMI";
+        case DOT:        return "DOT";
+        case DOTDOT:     return "DOTDOT";
+        case AT:         return "AT";
+        case PLUS:       return "PLUS";
+        case MINUS:      return "MINUS";
+        case STAR:       return "STAR";
+        case SLASH:      return "SLASH";
+        case 0:          return "EOF";
+        default:         return "UNKNOWN";
     }
 }
 
@@ -229,28 +252,16 @@ bool lexer_scan(const char *source, const char *filename,
     }
 
     size_t initial_errs = diags->error_count;
+    YYSTYPE lval;
+    YYLTYPE lloc;
     int tok_code;
-    while ((tok_code = configlang_yylex(scanner)) != TOK_EOF) {
-        token_kind_t kind = (token_kind_t)tok_code;
-        diag_loc_t loc = s_last_token_loc;
-
-        const char *lexeme = configlang_yyget_text(scanner);
-        if (kind == TOK_STRING_LIT) {
-            lexeme = s_strbuf.data;
-        } else if (kind == TOK_INT_LIT) {
-            token_val_t val;
-            handle_int_literal(lexeme, loc, &extra, &val);
-        }
-
+    while ((tok_code = configlang_yylex(&lval, &lloc, scanner)) != 0) {
         if (dump_tokens) {
             char pos_str[32];
-            snprintf(pos_str, sizeof(pos_str), "%zu:%zu", loc.line, loc.col);
-            fprintf(stderr, "%-10s %-13s %s\n", pos_str, lexer_token_name(kind),
+            snprintf(pos_str, sizeof(pos_str), "%d:%d", lloc.first_line, lloc.first_column);
+            const char *lexeme = configlang_yyget_text(scanner);
+            fprintf(stderr, "%-10s %-13s %s\n", pos_str, lexer_token_name(tok_code),
                     lexeme ? lexeme : "");
-        }
-
-        if (kind == TOK_STRING_LIT) {
-            util_strbuf_destroy(&s_strbuf);
         }
     }
 

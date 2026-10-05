@@ -9,9 +9,17 @@
  */
 
 #include "arena.h"
+#include "ast.h"
+#include "codegen.h"
 #include "diag.h"
 #include "lexer.h"
+#include "optimizer.h"
+#include "parser.h"
+#include "semantic.h"
+#include "symtab.h"
+#include "tac.h"
 #include "util.h"
+#include "validator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -156,6 +164,114 @@ int main(int argc, char **argv) {
     }
 
     lexer_scan(source, opts.input_path, &diags, arena, opts.dump_tokens);
+    if (diags.error_count > 0) {
+        diag_render_all(&diags);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 1;
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 2: Syntax Analysis & AST Construction] ===\n");
+    }
+
+    ast_node_t *ast = parser_parse(source, opts.input_path, &diags, arena);
+
+    if (opts.dump_ast && ast != NULL) {
+        ast_dump(ast, stderr);
+    }
+
+    if (diags.error_count > 0 || ast == NULL) {
+        diag_render_all(&diags);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 1;
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 3: Symbol Table Construction (Pass 1)] ===\n");
+    }
+
+    symtab_t *st = symtab_create(arena, opts.input_path);
+    symtab_build_pass1(st, ast, &diags);
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 4: Semantic Analysis (Pass 2)] ===\n");
+    }
+
+    sem_context_t sem_ctx = { st, &diags, arena, NULL, NULL };
+    semantic_analyze(&sem_ctx, ast);
+
+    if (opts.dump_symtab) {
+        symtab_dump(st, stderr);
+    }
+    if (opts.dump_deps) {
+        semantic_dump_deps(&sem_ctx, stderr);
+    }
+
+    if (diags.error_count > 0) {
+        diag_render_all(&diags);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 1;
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 5: Three-Address Code (TAC) Generation] ===\n");
+    }
+
+    tac_program_t *tac_prog = tac_generate(arena, st);
+    if (opts.dump_tac && tac_prog != NULL) {
+        tac_dump(tac_prog, stderr);
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 6: Constant Propagation & Folding Optimization] ===\n");
+    }
+
+    opt_stats_t opt_stats = optimizer_run(tac_prog, &diags);
+    if (opts.dump_tac_opt && tac_prog != NULL) {
+        optimizer_dump(tac_prog, &opt_stats, stderr);
+    }
+
+    if (diags.error_count > 0) {
+        diag_render_all(&diags);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 1;
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 7: Value & Range Validation] ===\n");
+    }
+
+    validator_validate(tac_prog, st, &diags);
+
+    if (diags.error_count > 0) {
+        diag_render_all(&diags);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 1;
+    }
+
+    if (opts.dump_phases) {
+        fprintf(stderr, "=== [Phase 8: Code Generation (%s)] ===\n",
+                opts.format == FORMAT_YAML ? "YAML" : "JSON");
+    }
+
+    codegen_format_t fmt = (opts.format == FORMAT_YAML) ? CODEGEN_YAML : CODEGEN_JSON;
+    if (!codegen_emit_file(st, fmt, opts.output_path)) {
+        fprintf(stderr, "error: failed to write output to '%s'\n", opts.output_path);
+        diag_destroy(&diags);
+        arena_destroy(arena);
+        free(source);
+        return 2;
+    }
 
     if (diags.count > 0) {
         diag_render_all(&diags);
