@@ -1,303 +1,143 @@
 /**
  * ============================================================================
- * Three-Address Code Generator Implementation (tac.c)
+ * Three-Address Code Implementation (tac.c)
  * ============================================================================
  * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
  *
- * SYLLABUS MAPPING:
- *   - Experiment 7: Design and implementation of Intermediate Code Generator
- *     (Three Address Code) for given expressions.
- *
- * HOW TAC IS GENERATED HERE:
- *   1. Variables are emitted in topological order (dependencies first).
- *   2. tac_emit_expr() recursively decomposes an AST expression:
- *      - Binary expressions emit an ADD/SUB/MUL/DIV instruction and return a
- *        new temporary variable (t1, t2, ...).
- *      - Unary negation emits a NEG instruction.
- *      - Variable references emit a LOAD instruction.
- *   3. Finally, a STORE instruction binds the final evaluated temporary
- *      to the target variable name (e.g. STORE server.port, t1).
+ * Intermediate Code Generation: decomposes expression trees into linear quadruples.
  * ============================================================================
  */
 
 #include "tac.h"
-#include <inttypes.h>
-#include <string.h>
 
-tac_program_t *tac_create_program(arena_t *arena) {
-    tac_program_t *p = (tac_program_t *)arena_alloc(arena, sizeof(tac_program_t));
-    p->arena = arena;
-    p->head = NULL;
-    p->tail = NULL;
-    p->count = 0;
-    p->next_temp_id = 1;
-    return p;
+static TAC *tac_head = NULL;
+static TAC *tac_tail = NULL;
+static int temp_count = 1;
+
+void tac_init(void) {
+    TAC *cur = tac_head;
+    while (cur) {
+        TAC *tmp = cur->next;
+        free(cur);
+        cur = tmp;
+    }
+    tac_head = NULL;
+    tac_tail = NULL;
+    temp_count = 1;
 }
 
-tac_operand_t tac_new_temp(tac_program_t *prog) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_TEMP;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "t%zu", prog->next_temp_id++);
-    op.name = arena_strdup(prog->arena, buf);
-    memset(&op.const_val, 0, sizeof(op.const_val));
-    return op;
+char *tac_new_temp(void) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "t%d", temp_count++);
+    return strdup(buf);
 }
 
-tac_operand_t tac_const_int(int64_t val) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_CONST;
-    op.name = NULL;
-    op.const_val.has_value = true;
-    op.const_val.type = TYPE_INT;
-    op.const_val.val.ival = val;
-    return op;
-}
+void tac_emit(const char *op, const char *arg1, const char *arg2, const char *result) {
+    TAC *t = (TAC *)malloc(sizeof(TAC));
+    memset(t, 0, sizeof(TAC));
+    strncpy(t->op, op, sizeof(t->op) - 1);
+    if (arg1) strncpy(t->arg1, arg1, sizeof(t->arg1) - 1);
+    if (arg2) strncpy(t->arg2, arg2, sizeof(t->arg2) - 1);
+    if (result) strncpy(t->result, result, sizeof(t->result) - 1);
+    t->next = NULL;
 
-tac_operand_t tac_const_float(double val) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_CONST;
-    op.name = NULL;
-    op.const_val.has_value = true;
-    op.const_val.type = TYPE_FLOAT;
-    op.const_val.val.fval = val;
-    return op;
-}
-
-tac_operand_t tac_const_string(arena_t *arena, const char *str) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_CONST;
-    op.name = NULL;
-    op.const_val.has_value = true;
-    op.const_val.type = TYPE_STRING;
-    op.const_val.val.sval = arena_strdup(arena, str);
-    return op;
-}
-
-tac_operand_t tac_const_bool(bool val) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_CONST;
-    op.name = NULL;
-    op.const_val.has_value = true;
-    op.const_val.type = TYPE_BOOL;
-    op.const_val.val.bval = val;
-    return op;
-}
-
-tac_operand_t tac_var(arena_t *arena, const char *path) {
-    tac_operand_t op;
-    op.kind = TAC_OPERAND_VAR;
-    op.name = arena_strdup(arena, path);
-    memset(&op.const_val, 0, sizeof(op.const_val));
-    return op;
-}
-
-void tac_emit(tac_program_t *prog, tac_op_t op, tac_operand_t arg1,
-              tac_operand_t arg2, tac_operand_t result, diag_loc_t loc) {
-    tac_instr_t *ins = (tac_instr_t *)arena_alloc(prog->arena, sizeof(tac_instr_t));
-    ins->op = op;
-    ins->arg1 = arg1;
-    ins->arg2 = arg2;
-    ins->result = result;
-    ins->loc = loc;
-    ins->next = NULL;
-
-    if (prog->tail == NULL) {
-        prog->head = ins;
+    if (!tac_head) {
+        tac_head = t;
+        tac_tail = t;
     } else {
-        prog->tail->next = ins;
+        tac_tail->next = t;
+        tac_tail = t;
     }
-    prog->tail = ins;
-    prog->count++;
 }
 
-static tac_operand_t tac_emit_expr(tac_program_t *prog, const symtab_t *st,
-                                  const ast_node_t *expr);
-
-static tac_operand_t tac_emit_binary(tac_program_t *prog, const symtab_t *st,
-                                    const ast_node_t *expr) {
-    tac_operand_t left = tac_emit_expr(prog, st, expr->data.binary.left);
-    tac_operand_t right = tac_emit_expr(prog, st, expr->data.binary.right);
-    tac_operand_t temp = tac_new_temp(prog);
-
-    tac_op_t top = TAC_ADD;
-    switch (expr->data.binary.op) {
-        case BIN_ADD: top = TAC_ADD; break;
-        case BIN_SUB: top = TAC_SUB; break;
-        case BIN_MUL: top = TAC_MUL; break;
-        case BIN_DIV: top = TAC_DIV; break;
-    }
-    tac_emit(prog, top, left, right, temp, expr->loc);
-    return temp;
+TAC *tac_get_head(void) {
+    return tac_head;
 }
 
-static tac_operand_t tac_emit_expr(tac_program_t *prog, const symtab_t *st,
-                                  const ast_node_t *expr) {
-    if (expr == NULL) {
-        return (tac_operand_t){0};
-    }
-    switch (expr->kind) {
-        case AST_LIT_INT:
-            return tac_const_int(expr->data.lit_int.ival);
-        case AST_LIT_FLOAT:
-            return tac_const_float(expr->data.lit_float.fval);
-        case AST_LIT_STRING:
-            return tac_const_string(prog->arena, expr->data.lit_string.sval);
-        case AST_LIT_BOOL:
-            return tac_const_bool(expr->data.lit_bool.bval);
-        case AST_REF: {
-            tac_operand_t ref_var = tac_var(prog->arena, expr->data.ref.path);
-            tac_operand_t temp = tac_new_temp(prog);
-            tac_emit(prog, TAC_LOAD, ref_var, (tac_operand_t){0}, temp, expr->loc);
+static char *tac_gen_expr(ASTNode *expr) {
+    if (!expr) return "";
+    char buf[64];
+
+    switch (expr->type) {
+        case NODE_INT:
+            snprintf(buf, sizeof(buf), "%d", expr->ival);
+            return strdup(buf);
+
+        case NODE_FLOAT:
+            snprintf(buf, sizeof(buf), "%g", expr->fval);
+            return strdup(buf);
+
+        case NODE_STRING:
+            snprintf(buf, sizeof(buf), "\"%s\"", expr->sval);
+            return strdup(buf);
+
+        case NODE_BOOL:
+            return expr->bval ? "true" : "false";
+
+        case NODE_REF: {
+            char *temp = tac_new_temp();
+            tac_emit("LOAD", expr->name, "", temp);
             return temp;
         }
-        case AST_BINARY:
-            return tac_emit_binary(prog, st, expr);
-        case AST_UNARY: {
-            tac_operand_t sub = tac_emit_expr(prog, st, expr->data.unary.operand);
-            tac_operand_t temp = tac_new_temp(prog);
-            tac_emit(prog, TAC_NEG, sub, (tac_operand_t){0}, temp, expr->loc);
+
+        case NODE_BINARY: {
+            char *left = tac_gen_expr(expr->left);
+            char *right = tac_gen_expr(expr->right);
+            char *temp = tac_new_temp();
+
+            const char *op_name = "ADD";
+            if (expr->op == '-') op_name = "SUB";
+            else if (expr->op == '*') op_name = "MUL";
+            else if (expr->op == '/') op_name = "DIV";
+
+            tac_emit(op_name, left, right, temp);
             return temp;
         }
+
         default:
-            return (tac_operand_t){0};
+            return "";
     }
 }
 
-static void tac_emit_symbol(tac_program_t *prog, const symtab_t *st, symbol_t *sym);
+void tac_generate(ASTNode *node, const char *prefix) {
+    if (!node) return;
 
-static void tac_emit_referenced_symbols(tac_program_t *prog, const symtab_t *st,
-                                       const ast_node_t *expr) {
-    if (expr == NULL) {
-        return;
-    }
-    if (expr->kind == AST_REF) {
-        symbol_t *target = symtab_lookup(st, expr->data.ref.path);
-        if (target != NULL && target->kind == SYM_VALUE) {
-            tac_emit_symbol(prog, st, target);
-        }
-    } else if (expr->kind == AST_BINARY) {
-        tac_emit_referenced_symbols(prog, st, expr->data.binary.left);
-        tac_emit_referenced_symbols(prog, st, expr->data.binary.right);
-    } else if (expr->kind == AST_UNARY) {
-        tac_emit_referenced_symbols(prog, st, expr->data.unary.operand);
-    }
-}
-
-static void tac_emit_symbol(tac_program_t *prog, const symtab_t *st, symbol_t *sym) {
-    if (sym == NULL || sym->kind != SYM_VALUE || sym->state != STATE_UNVISITED) {
-        return;
-    }
-    sym->state = STATE_VISITING;
-    /* First ensure all dependencies are emitted in topological order */
-    if (sym->decl_node != NULL && sym->decl_node->kind == AST_DECL) {
-        tac_emit_referenced_symbols(prog, st, sym->decl_node->data.decl.expr);
-    }
-
-    sym->state = STATE_DONE; /* Mark emitted */
-    if (sym->decl_node != NULL && sym->decl_node->kind == AST_DECL) {
-        tac_operand_t res = tac_emit_expr(prog, st, sym->decl_node->data.decl.expr);
-        tac_operand_t target_var = tac_var(prog->arena, sym->path);
-        diag_loc_t sloc = (sym->decl_node->data.decl.expr != NULL)
-                              ? sym->decl_node->data.decl.expr->loc
-                              : sym->decl_node->loc;
-        tac_emit(prog, TAC_STORE, res, (tac_operand_t){0}, target_var, sloc);
-    }
-}
-
-static void tac_traverse_scope(tac_program_t *prog, const symtab_t *st, symbol_t *sym) {
-    if (sym == NULL) {
-        return;
-    }
-    if (sym->kind == SYM_VALUE) {
-        tac_emit_symbol(prog, st, sym);
-    }
-    for (symbol_t *c = sym->children_head; c != NULL; c = c->next_child) {
-        tac_traverse_scope(prog, st, c);
-    }
-}
-
-static void reset_visit_states(symbol_t *sym) {
-    if (sym == NULL) {
-        return;
-    }
-    sym->state = STATE_UNVISITED;
-    for (symbol_t *c = sym->children_head; c != NULL; c = c->next_child) {
-        reset_visit_states(c);
-    }
-}
-
-tac_program_t *tac_generate(arena_t *arena, const symtab_t *st) {
-    if (arena == NULL || st == NULL) {
-        return NULL;
-    }
-    tac_program_t *prog = tac_create_program(arena);
-    reset_visit_states(st->root_block);
-    tac_traverse_scope(prog, st, st->root_block);
-    return prog;
-}
-
-static void print_operand(const tac_operand_t *op, FILE *out) {
-    if (op->kind == TAC_OPERAND_CONST) {
-        if (!op->const_val.has_value) {
-            fputs("?", out);
-            return;
-        }
-        switch (op->const_val.type) {
-            case TYPE_INT:
-                fprintf(out, "%" PRId64, op->const_val.val.ival);
-                break;
-            case TYPE_FLOAT:
-                fprintf(out, "%g", op->const_val.val.fval);
-                break;
-            case TYPE_STRING:
-                fprintf(out, "\"%s\"", op->const_val.val.sval);
-                break;
-            case TYPE_BOOL:
-                fprintf(out, "%s", op->const_val.val.bval ? "true" : "false");
-                break;
-            default:
-                fputs("?", out);
-                break;
-        }
-    } else if (op->name != NULL) {
-        fputs(op->name, out);
-    }
-}
-
-void tac_dump(const tac_program_t *prog, FILE *out) {
-    if (prog == NULL || out == NULL) {
-        return;
-    }
-    for (const tac_instr_t *i = prog->head; i != NULL; i = i->next) {
-        if (i->op == TAC_LOAD) {
-            print_operand(&i->result, out);
-            fputs(" = LOAD ", out);
-            print_operand(&i->arg1, out);
-            fputc('\n', out);
-        } else if (i->op == TAC_STORE) {
-            fputs("STORE ", out);
-            print_operand(&i->result, out);
-            fputs(", ", out);
-            print_operand(&i->arg1, out);
-            fputc('\n', out);
-        } else if (i->op == TAC_NEG) {
-            print_operand(&i->result, out);
-            fputs(" = -", out);
-            print_operand(&i->arg1, out);
-            fputc('\n', out);
+    if (node->type == NODE_BLOCK) {
+        char block_prefix[64];
+        if (prefix && prefix[0] != '\0') {
+            snprintf(block_prefix, sizeof(block_prefix), "%s.%s", prefix, node->name);
         } else {
-            const char *op_str = (i->op == TAC_ADD) ? "ADD" :
-                                 (i->op == TAC_SUB) ? "SUB" :
-                                 (i->op == TAC_MUL) ? "MUL" :
-                                 (i->op == TAC_DIV) ? "DIV" : "CONCAT";
-            print_operand(&i->result, out);
-            fputs(" = ", out);
-            print_operand(&i->arg1, out);
-            fprintf(out, " %s ", op_str);
-            print_operand(&i->arg2, out);
-            fputc('\n', out);
+            snprintf(block_prefix, sizeof(block_prefix), "%s", node->name);
         }
+        tac_generate(node->left, block_prefix);
+    } else if (node->type == NODE_DECL) {
+        char full_name[64];
+        if (prefix && prefix[0] != '\0') {
+            snprintf(full_name, sizeof(full_name), "%s.%s", prefix, node->name);
+        } else {
+            snprintf(full_name, sizeof(full_name), "%s", node->name);
+        }
+
+        char *val = tac_gen_expr(node->left);
+        tac_emit("STORE", val, "", full_name);
+    }
+
+    if (node->next) {
+        tac_generate(node->next, prefix);
+    }
+}
+
+void tac_print(void) {
+    TAC *cur = tac_head;
+    while (cur) {
+        if (strcmp(cur->op, "STORE") == 0) {
+            printf("STORE %s = %s\n", cur->result, cur->arg1);
+        } else if (strcmp(cur->op, "LOAD") == 0) {
+            printf("%s = LOAD @%s\n", cur->result, cur->arg1);
+        } else {
+            printf("%s = %s %s %s\n", cur->result, cur->arg1, cur->op, cur->arg2);
+        }
+        cur = cur->next;
     }
 }

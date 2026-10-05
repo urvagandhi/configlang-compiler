@@ -1,6 +1,6 @@
 # ConfigLang: Architectural Design Document
 
-**Course**: PCD (Principles of Compiler Design - 4CS501CC25)  
+**Course**: Principles of Compiler Design (4CS501CC25)  
 **Institution**: Institute of Technology, Nirma University  
 **Authors**: Urva Gandhi (`23BCE078`) & Rakshit Gajnotar (`23BCE077`)  
 
@@ -8,13 +8,13 @@
 
 ## 1. Executive Summary
 
-ConfigLang is an educational yet production-disciplined compiler engineered in standard C11 that translates typed configuration declarations (`.cfg`) into standard JSON and YAML. This document specifies the underlying software architecture, memory lifecycle, intermediate representation semantics, data structures, and optimization algorithms.
+**ConfigLang** is an educational, typed configuration language compiler written in standard C11 using **Flex** and **Bison**. It translates structured, typed configuration files (`.cfg`) into standard **JSON**. The compiler is specifically designed for undergraduate academic study, emphasizing readability, simplicity, and a clear mapping to classical compiler design principles.
 
 ---
 
 ## 2. Compiler Pipeline Architecture
 
-ConfigLang executes as an 8-phase pipeline orchestrated by the compiler driver (`src/main.c`). Execution between phases is strictly gated: if earlier phases produce fatal errors, subsequent phases are bypassed to avoid cascading or undefined behaviors.
+ConfigLang executes as an 8-phase pipeline orchestrated sequentially by the driver program in `src/main.c`:
 
 ```
  +-----------------------------------------------------------------------+
@@ -22,169 +22,123 @@ ConfigLang executes as an 8-phase pipeline orchestrated by the compiler driver (
  +-----------------------------------------------------------------------+
                                      |
                                      v
- [Phase 1: Lexical Analysis] (Flex 2.6 Pure Reentrant Scanner)
-   - Dispatches tokens with exact byte & character spans (line, col, len)
-   - Tracks state for string escapes, line/block comments
-   - HALTS on E101-E105
+ [Phase 1: Lexical Analysis] (Flex Scanner: src/lexer/lexer.l)
+   - Converts character stream into tokens: INT_LIT, FLOAT_LIT, STRING_LIT, IDENT, keywords
+   - Ignores whitespace, line comments (//), and block comments (/* ... */)
+   - Tracks line numbers automatically using %option yylineno
                                      |
                                      v
- [Phase 2: Syntax Analysis & AST Construction] (Bison 3.8 LALR(1) Parser)
-   - Validates grammar with %expect 0 (0 shift/reduce, 0 reduce/reduce)
-   - Constructs tagged-union AST nodes in Arena memory
-   - Implements panic-mode error recovery across statements
-   - HALTS on E201
+ [Phase 2: Syntax Analysis] (Bison Parser: src/parser/parser.y)
+   - LALR(1) parsing using Context-Free Grammar
+   - Resolves operator precedence with %left '+''-', %left '*''/', %nonassoc UMINUS
                                      |
                                      v
- [Phase 3: Symbol Table Construction (Pass 1)] (Scope Tree & Chained Hash Map)
-   - Traverses AST declarations and nested blocks
-   - Maps full canonical dot-paths (e.g. `database.port`)
-   - Detects duplicate keys in identical scopes (E301)
+ [Phase 3: Abstract Syntax Tree] (src/parser/ast.c)
+   - Constructs a lightweight hierarchical AST (NODE_DECL, NODE_BLOCK, NODE_BINARY, literals)
+   - Provides indented tree visualization via ast_print()
                                      |
                                      v
- [Phase 4: Semantic Analysis (Pass 2)] (Type Checker & Cycle Detector)
-   - Resolves `@references` across local and global scopes (E305, E309)
-   - Performs static type checking and type inference (E302, E307)
-   - Emits implicit widening warning (W402) and empty block warning (W401)
-   - Detects circular dependency cycles via DFS 3-color graph traversal (E306)
-   - HALTS on E301-E309
+ [Phase 4: Symbol Table] (src/symtab/symtab.c)
+   - Linked-list table storing identifier names, data types, and evaluated values
+   - Supports canonical dotted names for nested blocks (e.g. server.port)
                                      |
                                      v
- [Phase 5: Intermediate Code Generation] (Three-Address Code Emitter)
-   - Linearizes expressions into TAC quadruples
-   - Emits variable definitions in topological dependency order
+ [Phase 5: Semantic Analysis] (src/semantic/semantic.c)
+   - Pass 1: Traverses AST to register symbols and detect duplicate declarations
+   - Pass 2: Type checking, undefined reference detection (@x), and circular check (a = @a)
                                      |
                                      v
- [Phase 6: Optimization] (Constant Propagation & Folding)
-   - Iterative dataflow pass: propagates known constant operands
-   - Evaluates constant expressions at compile-time with checked 64-bit math
-   - Detects division by zero (E308) and integer arithmetic overflow (E310)
-   - Eliminates dead temporary registers
+ [Phase 6: Three-Address Code] (src/tac/tac.c)
+   - Linearizes expressions into quadruples: LOAD, STORE, ADD, SUB, MUL, DIV
+   - Allocates sequential temporary registers (t1, t2, t3, ...)
                                      |
                                      v
- [Phase 7: Validation] (Constraint Validator)
-   - Validates evaluated final values against declared ranges `[lo..hi]` (E303)
-   - Validates floating point finiteness (`isfinite`)
-   - Stores finalized values in Symbol records
-   - HALTS on E303, E310
+ [Phase 7: Code Optimization] (src/optimizer/optimizer.c)
+   - Constant Propagation: Replaces variable and temporary uses with known constant values
+   - Constant Folding: Computes constant arithmetic at compile time (e.g. 30 * 1000 -> 30000)
+   - Removes redundant temporary instructions from the TAC stream
                                      |
                                      v
- [Phase 8: Target Code Generation] (JSON & YAML Serializers)
-   - Serializes evaluated symbol tree with 2-space indentation
-   - Handles string escaping and numeric formatting
+ [Phase 8: Target Code Generation] (src/codegen/codegen.c)
+   - Traverses the AST and queries evaluated Symbol Table values
+   - Emits clean, 2-space indented standard JSON
 ```
 
 ---
 
-## 3. Memory Architecture: Chunked Arena Allocator
+## 3. Data Structures & Representations
 
-To guarantee high performance and absolute memory safety under Valgrind (zero leaks, zero dangling pointers), ConfigLang employs an **Arena Allocator** (`src/arena.h`, `src/arena.c`).
+### 3.1 Abstract Syntax Tree (`ASTNode`)
+Located in `src/parser/ast.h`:
+```c
+typedef enum {
+    NODE_BLOCK,     /* Nested scope: server { ... } */
+    NODE_DECL,      /* Declaration: port : int = 8080; */
+    NODE_BINARY,    /* Binary expression: left OP right */
+    NODE_INT,       /* Integer literal */
+    NODE_FLOAT,     /* Floating-point literal */
+    NODE_STRING,    /* String literal */
+    NODE_BOOL,      /* Boolean literal */
+    NODE_REF        /* Variable reference: @base_port */
+} ASTNodeType;
 
-### 3.1 Design Principles
-1. **$O(1)$ Allocation**: Fast pointer bump within the active memory chunk.
-2. **8-Byte Alignment**: Every allocated pointer satisfies `(uintptr_t)ptr % 8 == 0`, ensuring optimal CPU access and preventing alignment faults on 64-bit architectures.
-3. **Single Bulk Deallocation**: The entire compiler AST, Symbol Table, and TAC instructions are reclaimed simultaneously in `arena_destroy()`. Individual `free()` operations on AST nodes are entirely eliminated.
-4. **Chunk Growth**: If an allocation exceeds the remaining capacity of the current 64 KB chunk, a new chunk is allocated and linked onto the chunk list.
-
+typedef struct ASTNode {
+    ASTNodeType type;
+    int line;
+    char *name;              /* Variable or block name */
+    DataType data_type;      /* Declared or inferred type */
+    int ival;
+    double fval;
+    char *sval;
+    bool bval;
+    char op;                 /* '+', '-', '*', '/' */
+    struct ASTNode *left;
+    struct ASTNode *right;
+    struct ASTNode *next;    /* Sibling in statement list */
+} ASTNode;
 ```
-Arena Structure:
- [arena_t]
-    |
-    +---> [chunk_t (64KB)] ---> [chunk_t (64KB)] ---> NULL
-             |
-             +-- current pointer (bump allocation)
-             +-- end pointer
+
+### 3.2 Symbol Table (`Symbol`)
+Located in `src/symtab/symtab.h`:
+```c
+typedef struct Symbol {
+    char name[64];           /* Canonical name, e.g. "server.port" */
+    DataType type;           /* int, float, string, bool */
+    int ival;                /* Computed integer value */
+    double fval;             /* Computed float value */
+    char sval[128];          /* Computed string value */
+    bool bval;               /* Computed boolean value */
+    bool is_assigned;        /* Assignment status flag */
+    struct Symbol *next;     /* Linked list pointer */
+} Symbol;
+```
+
+### 3.3 Three-Address Code Quadruple (`TAC`)
+Located in `src/tac/tac.h`:
+```c
+typedef struct TAC {
+    char op[16];             /* "ADD", "SUB", "MUL", "DIV", "LOAD", "STORE" */
+    char arg1[64];           /* First operand or referenced variable */
+    char arg2[64];           /* Second operand (or empty for unary/LOAD/STORE) */
+    char result[64];         /* Temporary variable (t1) or target variable */
+    struct TAC *next;        /* Linked list pointer */
+} TAC;
 ```
 
 ---
 
-## 4. Symbol Table Architecture
+## 4. Key Algorithms
 
-The symbol table (`src/symtab/symtab.h`, `src/symtab/symtab.c`) supports two simultaneous requirements:
-1. **Hierarchical Scope Tree**: Preserves structural containment and declaration order for nested configuration blocks and YAML/JSON serialization.
-2. **Chained Hash Map**: A 256-bucket hash table using the djb2 hash algorithm provides $O(1)$ lookup by canonical dot-path (e.g. `server.database.port`).
+### 4.1 Two-Pass Semantic Analysis
+1. **Pass 1 (Symbol Registration)**: Recursively traverses the AST. When visiting a block, prefixes the block name (e.g. `server.`). When encountering a declaration, verifies that the identifier is not already present in the symbol table; if already present, reports a duplicate error; otherwise, inserts the symbol.
+2. **Pass 2 (Expression Checking)**: Evaluates expression node types recursively:
+   - For references `@ident`, verifies that `ident` exists in the symbol table.
+   - For binary operations, checks that both operands are compatible (numbers with numbers, strings with `+`).
+   - Verifies that the expression type matches the declared type of the variable.
 
-### 4.1 Node Data Structure
-Each `symbol_t` contains:
-- `name`: Local identifier name (e.g. `port`).
-- `path`: Fully qualified canonical path (e.g. `server.port`).
-- `kind`: `SYM_VALUE` (scalar setting) or `SYM_BLOCK` (scope container).
-- `declared_type` & `effective_type`: `TYPE_INT`, `TYPE_FLOAT`, `TYPE_STRING`, `TYPE_BOOL`.
-- `range`: Optional numeric bounds constraint `[lo..hi]`.
-- `final_val`: Evaluated literal value stored after optimization and validation.
-- `parent`, `children_head`, `children_tail`, `next_child`: Ordered hierarchy pointers.
-- `hash_next`: Chaining bucket pointer for hash collisions.
-
----
-
-## 5. Semantic Analysis & Cycle Detection
-
-Semantic analysis runs as Pass 2 over the symbol table and AST (`src/semantic/semantic.h`, `src/semantic/semantic.c`).
-
-### 5.1 Reference Resolution Algorithm
-References take the form `@identifier` or `@block.sub_ident`.
-1. The resolver strips the leading `@`.
-2. First, it attempts a local lookup within the current enclosing block scope (`symtab_lookup_local`).
-3. If not found locally, it attempts a lookup by canonical path starting from the root scope (`symtab_lookup`).
-4. If the target is unresolved, error `E305` is emitted.
-5. If the target is a block rather than a value, error `E309` is emitted.
-
-### 5.2 Dependency Ordering & Cycle Detection
-To support forward references and arbitrary reference topology, ConfigLang tracks directed dependency edges $A \to B$ ($A$ depends on $B$).
-- Node states during DFS traversal:
-  - `STATE_UNVISITED (0)`: Node not yet examined.
-  - `STATE_VISITING (1)`: Node currently on the DFS call stack.
-  - `STATE_DONE (2)`: Node and all descendants completely evaluated.
-- If during recursive traversal of $A$'s initialization expression, a reference to $B$ is encountered where $B$ is `STATE_VISITING`, a circular dependency exists. Diagnostic `E306` is reported, pinpointing the cycle ($A \to B$), and evaluation aborts without recursion.
-
----
-
-## 6. Intermediate Representation: Three-Address Code (TAC)
-
-ConfigLang compiles high-level expressions into linear Three-Address Code quadruples (`src/tac/tac.h`, `src/tac/tac.c`).
-
-### 6.1 Instruction Format
-```
-[OPCODE] [ARG1], [ARG2] -> [RESULT]
-```
-Supported TAC operations:
-- `TAC_STORE target, value`: Stores a value into a canonical configuration key.
-- `TAC_LOAD source -> tN`: Loads a referenced variable value into temporary register `tN`.
-- `TAC_ADD`, `TAC_SUB`, `TAC_MUL`, `TAC_DIV`: Binary arithmetic operations.
-- `TAC_NEG`: Unary negation.
-
-### 6.2 Topological Emission
-TAC instructions are emitted in topological dependency order. Independent constants are defined first, followed by computed variables whose dependencies have already been linearized.
-
----
-
-## 7. Optimizer Architecture
-
-The optimizer (`src/optimizer/optimizer.h`, `src/optimizer/optimizer.c`) executes iterative passes until a fixpoint is achieved:
-
-1. **Constant Propagation**:
-   - Maintains an in-memory mapping from temporary registers `tN` and variables to known evaluated literals (`val_literal_t`).
-   - Replaces `TAC_LOAD` operands with their propagated constants.
-2. **Checked Constant Folding**:
-   - When all operands to a binary or unary TAC operation are constants, the operation is computed at compile-time.
-   - **Division by Zero Protection (`E308`)**: If an integer or floating point divisor is `0`, error `E308` is emitted.
-   - **Arithmetic Overflow Protection (`E310`)**: Integer addition, subtraction, and multiplication utilize GCC built-ins (`__builtin_add_overflow`, `__builtin_sub_overflow`, `__builtin_mul_overflow`) on 64-bit signed integers (`int64_t`). If overflow occurs, error `E310` is emitted.
-   - String concatenation (`+`) is folded into an arena-allocated concatenated string.
-3. **Dead Temporary Elimination**:
-   - `TAC_LOAD` and binary operations whose temporary outputs have been propagated into subsequent expressions are eliminated from the instruction list.
-
----
-
-## 8. Diagnostic Engine
-
-The diagnostic subsystem (`src/common/diag.h`, `src/common/diag.c`) strictly complies with the Clang / Rust compiler style specified in SRS §5.4:
-
-```
-tests/invalid/val_range_exceeded.cfg:1:18: error[E303]: value 11 outside declared range [1..10] for 'p'
-    1 | p : int(1..10) = 11;
-      |                  ^^
-1 error, 0 warnings generated.
-```
-
-- Automatic column gutter alignment (`    1 | `).
-- Exact multi-column carets matching token width (`^^`).
-- ANSI terminal color coding (red for errors, yellow for warnings, bold headers) disabled automatically when `--no-color` is set or stdout is not a TTY.
+### 4.2 Constant Propagation & Folding
+1. An associative map stores known constant bindings for variables and temporaries.
+2. The optimizer scans TAC instructions in order:
+   - For `LOAD @var`: Retrieves the constant value of `var` and binds the temporary to it.
+   - For arithmetic operations: If both operands are known constants, precomputes the result immediately, binds the result temporary, and unlinks the TAC instruction.
+   - For `STORE var = val`: Updates the final evaluated value in both the symbol table and the bindings map.

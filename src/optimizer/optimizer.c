@@ -5,260 +5,211 @@
  * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
  *
- * SYLLABUS MAPPING:
- *   - Experiment 9: Design and implementation of Code Optimizer for given
- *     Three Address Code.
- *
- * HOW THE OPTIMIZER RUNS IN A SINGLE PASS:
- *   1. Maintains a map of known constants (const_map_t).
- *   2. For each TAC instruction:
- *      - Replaces temporary or variable arguments with known constants (propagation).
- *      - If both arguments are constants:
- *          Calls fold_binary() to compute the result at compile time (folding).
- *          Checks for division by zero (E308) and integer overflow (E310).
- *          Records the result in the constant map and removes the instruction.
- *      - If a STORE has a constant value: records final value for the variable.
+ * HOW IT WORKS (In 2 Simple Steps):
+ *   Step 1 (Constant Propagation): If an operand is a temporary or variable
+ *          whose value is already known, substitute that constant into place.
+ *   Step 2 (Constant Folding): If both operands of an arithmetic instruction
+ *          are constants, compute the result at compile time (e.g. 30 * 1000 -> 30000)
+ *          and eliminate the instruction!
  * ============================================================================
  */
 
 #include "optimizer.h"
-#include <math.h>
-#include <string.h>
+#include "symtab.h"
+#include <ctype.h>
 
-#define CONST_MAP_SIZE 2048U
+/** Simple constant mapping table (var_name -> const_val) */
+typedef struct ConstBinding {
+    char name[64];
+    char value[256];
+    struct ConstBinding *next;
+} ConstBinding;
 
-typedef struct const_entry {
-    char *name;
-    sym_value_t val;
-    struct const_entry *next;
-} const_entry_t;
+static ConstBinding *bindings = NULL;
+static int fold_count = 0;
 
-typedef struct const_map {
-    arena_t *arena;
-    const_entry_t *buckets[CONST_MAP_SIZE];
-} const_map_t;
-
-static uint32_t map_hash(const char *s) {
-    uint32_t h = 5381U;
-    int c;
-    while ((c = *s++) != 0) {
-        h = ((h << 5) + h) + (uint32_t)c;
+static void set_binding(const char *name, const char *val) {
+    ConstBinding *b = bindings;
+    while (b) {
+        if (strcmp(b->name, name) == 0) {
+            strncpy(b->value, val, sizeof(b->value) - 1);
+            return;
+        }
+        b = b->next;
     }
-    return h % CONST_MAP_SIZE;
+    b = (ConstBinding *)malloc(sizeof(ConstBinding));
+    strncpy(b->name, name, sizeof(b->name) - 1);
+    strncpy(b->value, val, sizeof(b->value) - 1);
+    b->next = bindings;
+    bindings = b;
 }
 
-static void map_set(const_map_t *map, const char *name, sym_value_t val) {
-    uint32_t b = map_hash(name);
-    const_entry_t *e = (const_entry_t *)arena_alloc(map->arena, sizeof(const_entry_t));
-    e->name = arena_strdup(map->arena, name);
-    e->val = val;
-    e->next = map->buckets[b];
-    map->buckets[b] = e;
-}
-
-static bool map_get(const const_map_t *map, const char *name, sym_value_t *out_val) {
-    uint32_t b = map_hash(name);
-    for (const_entry_t *e = map->buckets[b]; e != NULL; e = e->next) {
-        if (strcmp(e->name, name) == 0) {
-            *out_val = e->val;
-            return true;
+static const char *get_binding(const char *name) {
+    ConstBinding *b = bindings;
+    while (b) {
+        if (strcmp(b->name, name) == 0) {
+            return b->value;
         }
+        b = b->next;
     }
-    return false;
+    return NULL;
 }
 
-static bool fold_binary_int(tac_op_t op, int64_t a, int64_t b, int64_t *out,
-                            diag_collector_t *diags, diag_loc_t loc) {
-    if (op == TAC_ADD) {
-        if (__builtin_add_overflow(a, b, out)) {
-            diag_error(diags, DIAG_E310, loc, "integer overflow in addition");
-            return false;
-        }
-    } else if (op == TAC_SUB) {
-        if (__builtin_sub_overflow(a, b, out)) {
-            diag_error(diags, DIAG_E310, loc, "integer overflow in subtraction");
-            return false;
-        }
-    } else if (op == TAC_MUL) {
-        if (__builtin_mul_overflow(a, b, out)) {
-            diag_error(diags, DIAG_E310, loc, "integer overflow in multiplication");
-            return false;
-        }
-    } else if (op == TAC_DIV) {
-        if (b == 0) {
-            diag_error(diags, DIAG_E308, loc, "division by zero");
-            return false;
-        }
-        if (a == INT64_MIN && b == -1) {
-            diag_error(diags, DIAG_E310, loc, "integer overflow in division");
-            return false;
-        }
-        *out = a / b;
+/* Helper: Check if string is a numeric integer */
+static bool is_integer(const char *str) {
+    if (!str || !*str) return false;
+    if (*str == '-' || *str == '+') str++;
+    if (!*str) return false;
+    while (*str) {
+        if (!isdigit(*str)) return false;
+        str++;
     }
     return true;
 }
 
-static bool fold_binary_float(tac_op_t op, double a, double b, double *out,
-                              diag_collector_t *diags, diag_loc_t loc) {
-    if (op == TAC_DIV && b == 0.0) {
-        diag_error(diags, DIAG_E308, loc, "division by zero");
-        return false;
-    }
-    double res = (op == TAC_ADD) ? (a + b) : (op == TAC_SUB) ? (a - b) :
-                 (op == TAC_MUL) ? (a * b) : (a / b);
-    if (!isfinite(res)) {
-        diag_error(diags, DIAG_E310, loc, "non-finite floating point arithmetic result");
-        return false;
-    }
-    *out = res;
-    return true;
+/* Helper: Check if string is a float */
+static bool is_float(const char *str) {
+    if (!str || !*str) return false;
+    char *endptr = NULL;
+    strtod(str, &endptr);
+    return (endptr != str && *endptr == '\0' && strchr(str, '.') != NULL);
 }
 
-static bool fold_binary(arena_t *arena, tac_op_t op, sym_value_t v1, sym_value_t v2,
-                        sym_value_t *out, diag_collector_t *diags, diag_loc_t loc) {
-    if (v1.type == TYPE_INT && v2.type == TYPE_INT) {
-        int64_t ires = 0;
-        if (!fold_binary_int(op, v1.val.ival, v2.val.ival, &ires, diags, loc)) {
-            return false;
-        }
-        out->has_value = true;
-        out->type = TYPE_INT;
-        out->val.ival = ires;
-        return true;
-    }
-    if ((v1.type == TYPE_INT || v1.type == TYPE_FLOAT) &&
-        (v2.type == TYPE_INT || v2.type == TYPE_FLOAT)) {
-        double d1 = (v1.type == TYPE_INT) ? (double)v1.val.ival : v1.val.fval;
-        double d2 = (v2.type == TYPE_INT) ? (double)v2.val.ival : v2.val.fval;
-        double fres = 0.0;
-        if (!fold_binary_float(op, d1, d2, &fres, diags, loc)) {
-            return false;
-        }
-        out->has_value = true;
-        out->type = TYPE_FLOAT;
-        out->val.fval = fres;
-        return true;
-    }
-    if (v1.type == TYPE_STRING && v2.type == TYPE_STRING && op == TAC_ADD) {
-        size_t l1 = strlen(v1.val.sval);
-        size_t l2 = strlen(v2.val.sval);
-        char *cat = (char *)arena_alloc(arena, l1 + l2 + 1);
-        memcpy(cat, v1.val.sval, l1);
-        memcpy(cat + l1, v2.val.sval, l2 + 1);
-        out->has_value = true;
-        out->type = TYPE_STRING;
-        out->val.sval = cat;
-        return true;
-    }
-    return false;
+/* Helper: Check if string is a quoted string literal */
+static bool is_string_literal(const char *str) {
+    if (!str) return false;
+    size_t len = strlen(str);
+    return (len >= 2 && str[0] == '"' && str[len - 1] == '"');
 }
 
-static void try_propagate_operand(const_map_t *map, tac_operand_t *op,
-                                 size_t *prop_count) {
-    if (op->kind == TAC_OPERAND_TEMP || op->kind == TAC_OPERAND_VAR) {
-        sym_value_t cval;
-        if (op->name != NULL && map_get(map, op->name, &cval)) {
-            op->kind = TAC_OPERAND_CONST;
-            op->const_val = cval;
-            (*prop_count)++;
-        }
-    }
-}
+int optimize_tac(void) {
+    fold_count = 0;
+    bindings = NULL;
 
-opt_stats_t optimizer_run(tac_program_t *prog, diag_collector_t *diags) {
-    opt_stats_t stats = {0};
-    if (prog == NULL) {
-        return stats;
-    }
-    stats.instructions_before = prog->count;
+    TAC *prev = NULL;
+    TAC *cur = tac_get_head();
 
-    const_map_t map;
-    map.arena = prog->arena;
-    memset(map.buckets, 0, sizeof(map.buckets));
-
-    tac_instr_t *prev = NULL;
-    tac_instr_t *cur = prog->head;
-
-    while (cur != NULL) {
-        try_propagate_operand(&map, &cur->arg1, &stats.propagations_count);
-        try_propagate_operand(&map, &cur->arg2, &stats.propagations_count);
-
-        if (cur->op == TAC_LOAD && cur->arg1.kind == TAC_OPERAND_CONST) {
-            map_set(&map, cur->result.name, cur->arg1.const_val);
-            stats.removed_count++;
-            if (prev == NULL) {
-                prog->head = cur->next;
-            } else {
-                prev->next = cur->next;
+    while (cur) {
+        /* Handle LOAD instruction: propagate variable's known value into temporary */
+        if (strcmp(cur->op, "LOAD") == 0) {
+            const char *val = get_binding(cur->arg1);
+            if (val) {
+                set_binding(cur->result, val);
             }
-            cur = cur->next;
-            continue;
-        }
-
-        if (cur->op == TAC_STORE && cur->arg1.kind == TAC_OPERAND_CONST) {
-            map_set(&map, cur->result.name, cur->arg1.const_val);
             prev = cur;
             cur = cur->next;
             continue;
         }
 
-        if (cur->op == TAC_NEG && cur->arg1.kind == TAC_OPERAND_CONST) {
-            sym_value_t neg_val = cur->arg1.const_val;
-            if (neg_val.type == TYPE_INT) {
-                neg_val.val.ival = -neg_val.val.ival;
-            } else if (neg_val.type == TYPE_FLOAT) {
-                neg_val.val.fval = -neg_val.val.fval;
-            }
-            map_set(&map, cur->result.name, neg_val);
-            stats.folds_count++;
-            stats.removed_count++;
-            if (prev == NULL) {
-                prog->head = cur->next;
+        /* Step 1: Constant Propagation */
+        const char *c1 = get_binding(cur->arg1);
+        if (c1) strncpy(cur->arg1, c1, sizeof(cur->arg1) - 1);
+
+        const char *c2 = get_binding(cur->arg2);
+        if (c2) strncpy(cur->arg2, c2, sizeof(cur->arg2) - 1);
+
+        /* Step 2: Constant Folding on Binary Operations */
+        bool folded = false;
+        char result_buf[512] = "";
+
+        if ((is_integer(cur->arg1) || is_float(cur->arg1)) &&
+            (is_integer(cur->arg2) || is_float(cur->arg2))) {
+            bool has_float = is_float(cur->arg1) || is_float(cur->arg2);
+            if (has_float) {
+                double a = atof(cur->arg1);
+                double b = atof(cur->arg2);
+                double res = 0.0;
+                if (strcmp(cur->op, "ADD") == 0) res = a + b;
+                else if (strcmp(cur->op, "SUB") == 0) res = a - b;
+                else if (strcmp(cur->op, "MUL") == 0) res = a * b;
+                else if (strcmp(cur->op, "DIV") == 0 && b != 0.0) res = a / b;
+
+                snprintf(result_buf, sizeof(result_buf), "%g", res);
+                folded = true;
             } else {
+                int a = atoi(cur->arg1);
+                int b = atoi(cur->arg2);
+                int res = 0;
+                if (strcmp(cur->op, "ADD") == 0) res = a + b;
+                else if (strcmp(cur->op, "SUB") == 0) res = a - b;
+                else if (strcmp(cur->op, "MUL") == 0) res = a * b;
+                else if (strcmp(cur->op, "DIV") == 0 && b != 0) res = a / b;
+
+                snprintf(result_buf, sizeof(result_buf), "%d", res);
+                folded = true;
+            }
+        } else if (is_string_literal(cur->arg1) && is_string_literal(cur->arg2) && strcmp(cur->op, "ADD") == 0) {
+            /* String concatenation */
+            size_t l1 = strlen(cur->arg1);
+            size_t l2 = strlen(cur->arg2);
+            char s1[128] = "", s2[128] = "";
+            if (l1 >= 2) {
+                strncpy(s1, cur->arg1 + 1, l1 - 2);
+                s1[l1 - 2] = '\0';
+            }
+            if (l2 >= 2) {
+                strncpy(s2, cur->arg2 + 1, l2 - 2);
+                s2[l2 - 2] = '\0';
+            }
+            snprintf(result_buf, sizeof(result_buf), "\"%s%s\"", s1, s2);
+            folded = true;
+        }
+
+        if (folded) {
+            set_binding(cur->result, result_buf);
+            fold_count++;
+            /* Remove this folded temporary instruction */
+            if (prev) {
                 prev->next = cur->next;
             }
             cur = cur->next;
             continue;
         }
 
-        if (cur->arg1.kind == TAC_OPERAND_CONST && cur->arg2.kind == TAC_OPERAND_CONST) {
-            sym_value_t folded = {0};
-            if (fold_binary(prog->arena, cur->op, cur->arg1.const_val,
-                            cur->arg2.const_val, &folded, diags, cur->loc)) {
-                map_set(&map, cur->result.name, folded);
-                stats.folds_count++;
-                stats.removed_count++;
-                if (prev == NULL) {
-                    prog->head = cur->next;
-                } else {
-                    prev->next = cur->next;
-                }
-                cur = cur->next;
-                continue;
+        /* Handle STORE into variable */
+        if (strcmp(cur->op, "STORE") == 0) {
+            const char *final_val = cur->arg1;
+            const char *b = get_binding(cur->arg1);
+            if (b) {
+                final_val = b;
+                strncpy(cur->arg1, b, sizeof(cur->arg1) - 1);
             }
+
+            /* Record variable value in symbol table */
+            Symbol *sym = symtab_lookup(cur->result);
+            if (sym) {
+                sym->is_assigned = true;
+                if (is_string_literal(final_val) || sym->type == TYPE_STRING) {
+                    sym->type = TYPE_STRING;
+                    size_t len = strlen(final_val);
+                    if (len >= 2 && final_val[0] == '"' && final_val[len - 1] == '"') {
+                        strncpy(sym->sval, final_val + 1, len - 2);
+                        sym->sval[len - 2] = '\0';
+                    } else {
+                        strncpy(sym->sval, final_val, sizeof(sym->sval) - 1);
+                        sym->sval[sizeof(sym->sval) - 1] = '\0';
+                    }
+                } else if (strcmp(final_val, "true") == 0 || strcmp(final_val, "false") == 0 || sym->type == TYPE_BOOL) {
+                    sym->type = TYPE_BOOL;
+                    sym->bval = (strcmp(final_val, "true") == 0);
+                } else if (is_float(final_val) || sym->type == TYPE_FLOAT) {
+                    sym->type = TYPE_FLOAT;
+                    sym->fval = atof(final_val);
+                } else if (is_integer(final_val) || sym->type == TYPE_INT) {
+                    sym->type = TYPE_INT;
+                    sym->ival = atoi(final_val);
+                }
+            }
+            set_binding(cur->result, final_val);
         }
 
         prev = cur;
         cur = cur->next;
     }
 
-    size_t remaining = 0;
-    prog->tail = NULL;
-    for (tac_instr_t *i = prog->head; i != NULL; i = i->next) {
-        remaining++;
-        prog->tail = i;
-    }
-    prog->count = remaining;
-    stats.instructions_after = remaining;
-    return stats;
+    return fold_count;
 }
 
-void optimizer_dump(const tac_program_t *prog, const opt_stats_t *stats, FILE *out) {
-    if (prog == NULL || stats == NULL || out == NULL) {
-        return;
-    }
-    tac_dump(prog, out);
-    fprintf(out, "; before: %zu instructions, after: %zu | folds: %zu | propagations: %zu | removed: %zu\n",
-            stats->instructions_before, stats->instructions_after,
-            stats->folds_count, stats->propagations_count, stats->removed_count);
+void optimizer_print(void) {
+    tac_print();
 }

@@ -1,148 +1,108 @@
 # ConfigLang: Formal Grammar Specification
 
-**Course**: PCD (Principles of Compiler Design - 4CS501CC25)  
+**Course**: Principles of Compiler Design (4CS501CC25)  
 **Authors**: Urva Gandhi (`23BCE078`) & Rakshit Gajnotar (`23BCE077`)  
+**Institution**: Institute of Technology, Nirma University  
 
 ---
 
 ## 1. Lexical Grammar (Tokens)
 
-The lexical specification is implemented using GNU Flex (`src/lexer.l`).
+The lexical specification is implemented using **GNU Flex** (`src/lexer/lexer.l`).
 
 ### 1.1 Regular Definitions
 ```lex
 digit           [0-9]
 letter          [a-zA-Z_]
-ident           {letter}({letter}|{digit})*
+ident           {letter}({letter}|{digit})*(\.{letter}({letter}|{digit})*)*
 int_lit         {digit}+
-float_lit       {digit}+\.{digit}+([eE][+-]?{digit}+)?
-whitespace      [ \t\r\f]+
+float_lit       {digit}+\.{digit}+
+string_lit      \"([^"\\]|\\.)*\"
+whitespace      [ \t\r]+
 newline         \n
 ```
 
-### 1.2 Keywords & Punctuation
-| Token | Lexeme Pattern | Description |
-|:---|:---|:---|
-| `KW_INT` | `int` | 64-bit signed integer type |
-| `KW_FLOAT` | `float` | 64-bit IEEE double precision float |
-| `KW_STRING` | `string` | UTF-8 string literal type |
-| `KW_BOOL` | `bool` | Boolean type |
+### 1.2 Keywords & Tokens
+| Token | Pattern | Meaning |
+|---|---|---|
+| `KW_INT` | `int` | Integer type keyword |
+| `KW_FLOAT` | `float` | Float type keyword |
+| `KW_STRING` | `string` | String type keyword |
+| `KW_BOOL` | `bool` | Boolean type keyword |
 | `KW_TRUE` | `true` | Boolean true literal |
 | `KW_FALSE` | `false` | Boolean false literal |
-| `DOTDOT` | `..` | Range separator |
-| `AT` | `@` | Reference prefix operator |
-| `ASSIGN` | `=` | Assignment operator |
-| `COLON` | `:` | Type annotation delimiter |
-| `SEMI` | `;` | Statement terminator |
-| `DOT` | `.` | Scoped path delimiter |
-| `LBRACE` | `{` | Scope block begin |
-| `RBRACE` | `}` | Scope block end |
-| `LPAREN` | `(` | Range/expression grouping begin |
-| `RPAREN` | `)` | Range/expression grouping end |
-| `PLUS` | `+` | Addition / string concatenation |
-| `MINUS` | `-` | Subtraction / unary negation |
-| `STAR` | `*` | Multiplication |
-| `SLASH` | `/` | Division |
-
-### 1.3 Disambiguation & Longest Match
-- **Range Slice vs Float**: In `1..65535`, the sequence `1.` is followed immediately by another `.`. Flex's maximal-munch scanning and priority ordering ensures that `..` is recognized as `DOTDOT`, producing `INT_LIT(1)`, `DOTDOT`, `INT_LIT(65535)`.
-- **String Literals**: Enclosed in double quotes `"...""`. Handled via a start condition `<STR>` which collects characters and translates escape sequences (`\n`, `\t`, `\r`, `\"`, `\\`). Invalid escape sequences report `E104`.
-- **Comments**: Single-line comments (`//...`) discard characters until newline. Multi-line block comments (`/* ... */`) discard characters until `*/`, or report `E105` if EOF is reached.
+| `INT_LIT` | `[0-9]+` | Integer literal |
+| `FLOAT_LIT` | `[0-9]+\.[0-9]+` | Floating-point literal |
+| `STRING_LIT` | `\"([^"\\]|\\.)*\"` | Quoted string literal |
+| `IDENT` | `[a-zA-Z_][a-zA-Z0-9_]*` | Identifier / dotted path |
+| `DOTDOT` | `..` | Range constraint operator |
+| `'='` | `=` | Assignment operator |
+| `':'` | `:` | Type annotation separator |
+| `';'` | `;` | Statement terminator |
+| `'@'` | `@` | Variable reference prefix |
+| `'{'`, `'}'` | `{`, `}` | Block delimiters |
+| `'+'`, `'-'` | `+`, `-` | Arithmetic addition & subtraction / unary minus |
+| `'*'`, `'/'` | `*`, `/` | Arithmetic multiplication & division |
+| `'('`, `')'` | `(`, `)` | Parenthesized grouping |
 
 ---
 
 ## 2. Context-Free Grammar (Syntax)
 
-The syntax specification is implemented using GNU Bison (`src/parser.y`) with `%expect 0`.
+The syntax specification is implemented using **GNU Bison** (`src/parser/parser.y`).
 
-### 2.1 Grammar in EBNF / BNF Form
-
+### 2.1 Grammar Rules in BNF
 ```bnf
 program
-    : item_list
-    | /* empty */
-    ;
+    ::= stmt_list
 
-item_list
-    : item_list item
-    | item
-    ;
+stmt_list
+    ::= stmt stmt_list
+      | ε
 
-item
-    : declaration
-    | block
-    | error SEMI        /* Error recovery rule */
-    ;
+stmt
+    ::= decl
+      | block
 
 block
-    : IDENT LBRACE item_list RBRACE
-    | IDENT LBRACE RBRACE
-    ;
+    ::= IDENT '{' stmt_list '}'
 
-declaration
-    : IDENT COLON type range_opt ASSIGN expr SEMI
-    | IDENT ASSIGN expr SEMI
-    ;
+decl
+    ::= IDENT ':' type_spec opt_range '=' expr ';'
+      | IDENT '=' expr ';'
 
-type
-    : KW_INT
-    | KW_FLOAT
-    | KW_STRING
-    | KW_BOOL
-    ;
+type_spec
+    ::= 'int'
+      | 'float'
+      | 'string'
+      | 'bool'
 
-range_opt
-    : LPAREN range_bound DOTDOT range_bound RPAREN
-    | /* empty */
-    ;
-
-range_bound
-    : INT_LIT
-    | FLOAT_LIT
-    | MINUS INT_LIT
-    | MINUS FLOAT_LIT
-    ;
+opt_range
+    ::= '(' expr '..' expr ')'
+      | ε
 
 expr
-    : expr PLUS expr
-    | expr MINUS expr
-    | expr STAR expr
-    | expr SLASH expr
-    | MINUS expr %prec UMINUS
-    | LPAREN expr RPAREN
-    | literal
-    | reference
-    ;
-
-literal
-    : INT_LIT
-    | FLOAT_LIT
-    | STRING_LIT
-    | KW_TRUE
-    | KW_FALSE
-    ;
-
-reference
-    : AT path
-    ;
-
-path
-    : path DOT IDENT
-    | IDENT
-    ;
+    ::= expr '+' expr
+      | expr '-' expr
+      | expr '*' expr
+      | expr '/' expr
+      | '-' expr
+      | '(' expr ')'
+      | '@' IDENT
+      | INT_LIT
+      | FLOAT_LIT
+      | STRING_LIT
+      | 'true'
+      | 'false'
 ```
 
----
-
-## 3. Operator Precedence & Associativity
-
-Ambiguity in arithmetic expressions is resolved using Bison precedence declarations:
-
-| Precedence | Associativity | Operator Tokens | Description |
-|:---:|:---:|:---:|:---|
-| **1 (Lowest)** | Left | `PLUS`, `MINUS` | Binary addition, subtraction, string concatenation |
-| **2** | Left | `STAR`, `SLASH` | Binary multiplication, division |
-| **3 (Highest)** | Right | `UMINUS` (Unary `MINUS`) | Arithmetic negation |
-
-### Conflict Elimination
-By expressing operator precedence directly via `%left` and `%right` and maintaining distinct rules for typed declarations and untyped assignments, the LALR(1) state machine has **0 shift/reduce conflicts** and **0 reduce/reduce conflicts**.
+### 2.2 Operator Precedence and Associativity
+Operator precedence is declared in Bison to eliminate ambiguity:
+```yacc
+%left '+' '-'
+%left '*' '/'
+%nonassoc UMINUS
+```
+1. `*` and `/` have higher precedence than `+` and `-`.
+2. All binary arithmetic operators are left-associative.
+3. Unary minus (`-`) has the highest precedence (`%nonassoc UMINUS`).

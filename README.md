@@ -1,231 +1,187 @@
-# ConfigLang: A Typed Configuration Language Compiler with Semantic Validation
+# ConfigLang: A Simple Typed Configuration Language Compiler
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-blue.svg)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
-[![Tools: Flex & Bison](https://img.shields.io/badge/Tools-Flex%202.6%20%7C%20Bison%203.8-orange.svg)](https://www.gnu.org/software/bison/)
+[![Tools: Flex & Bison](https://img.shields.io/badge/Tools-Flex%20%7C%20Bison-orange.svg)](https://www.gnu.org/software/bison/)
 [![Build: GNU Make](https://img.shields.io/badge/Build-GNU%20Make-brightgreen.svg)](https://www.gnu.org/software/make/)
-[![Memory: Zero Leaks](https://img.shields.io/badge/Valgrind-0%20Leaks-success.svg)](https://valgrind.org/)
 
-**ConfigLang** is an end-to-end, industrial-grade compiler built in C11 from scratch (zero external dependencies) that compiles human-friendly, strongly-typed configuration files (`.cfg`) into standard **JSON** and **YAML**.
+**ConfigLang** is an educational, end-to-end configuration language compiler built from scratch in C11 using **Flex** and **Bison**. It translates human-friendly, strongly-typed configuration files (`.cfg`) into standard **JSON**.
 
-Developed as the Innovative Project for **Principles of Compiler Design (PCD - 4CS501CC25)** at **Nirma University**.
+Developed as the **Innovative Assignment** for **Principles of Compiler Design (PCD - 4CS501CC25)**, Semester-VII B.Tech CSE at **Nirma University**.
 
 ---
 
-## 👥 Authors
+## 👥 Authors & Team
 - **Urva Gandhi** (Roll No: `23BCE078`)
 - **Rakshit Gajnotar** (Roll No: `23BCE077`)
 
 ---
 
-## ✨ Features & Highlights
-
-- **Pure Reentrant Scanning (`Flex 2.6`)**: Tracks exact line and column ranges with `YY_USER_ACTION`, supports escape sequence decoding, block/line comments, and longest-match disambiguation (e.g. range slices `1..65535` vs numeric dot).
-- **Conflict-Free LALR(1) Parser (`Bison 3.8`)**: Formally proven grammar with zero shift/reduce and zero reduce/reduce conflicts (`%expect 0`). Features panic-mode syntax error recovery (`error SEMI`).
-- **Arena Memory Management**: High-performance chunked 8-byte aligned arena allocator (`arena_t`) holding all AST nodes, symbols, and TAC instructions. Guarantees $O(1)$ allocations and zero memory leaks under Valgrind.
-- **Hierarchical Symbol Table & Two-Pass Semantic Analysis**:
-  - **Pass 1**: Scoped block tree with chained hash map for $O(1)$ canonical dot-path lookup (`server.port`). Rejects duplicate keys (`E301`).
-  - **Pass 2**: Strong type validation (`int`, `float`, `string`, `bool`), range constraint validation (`E304`), reference resolution (`E305`, `E309`), and cycle detection via DFS coloring (`E306`).
-- **Three-Address Code (TAC) & Dataflow Optimization**:
-  - Emits linear intermediate representation in strict topological dependency order (`--tac`).
-  - Constant propagation, constant folding with 64-bit checked arithmetic (`E308` division by zero, `E310` integer overflow), and dead temporary elimination (`--tac-opt`).
-- **Post-Optimization Constraint Validator**: Enforces numeric ranges (`E303`) and verifies IEEE-754 floating point finiteness.
-- **Dual Serialization Backends**: Generates formatted, 2-space indented standard JSON and YAML.
-- **Clang/Rust-Style Diagnostics**: Multi-line contextual snippets with column gutters, source text, and exact carets (`^^^^`) matching all error (`E101`–`E310`) and warning (`W401`, `W402`) specifications.
+## 🎯 Project Design Philosophy
+- **Simple > Complete > Industry-Level**: Designed specifically as a clear, student-level compiler project that is easy to understand, debug, demonstrate, and explain during viva examinations.
+- **Clear 8-Phase Pipeline**: Every classical compiler phase lives in its own dedicated, clean directory with step-by-step comments.
+- **Zero Heavy Abstractions**: Standard C11 memory management, no complex arena allocators, no complicated dependency graphs, and no confusing reentrant scanner pointers.
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Compiler Architecture & Pipeline
+
+```
+                     +-----------------------------------+
+                     |      Source Code (*.cfg)          |
+                     +-----------------------------------+
+                                       |
+                                       v
+   [Phase 1]          Lexical Analysis (Flex: src/lexer/lexer.l)
+                      Converts character stream into tokens (IDENT, INT, STRING, etc.)
+                                       |
+                                       v
+   [Phase 2 & 3]      Syntax Analysis & AST (Bison: src/parser/parser.y, ast.c)
+                      LALR(1) parsing builds the Abstract Syntax Tree
+                                       |
+                                       v
+   [Phase 4]          Symbol Table Management (src/symtab/symtab.c)
+                      Simple linked list storing variables, types, and values
+                                       |
+                                       v
+   [Phase 5]          Semantic Analysis (src/semantic/semantic.c)
+                      Two-pass validation: type checking, undeclared/duplicate checks
+                                       |
+                                       v
+   [Phase 6]          Three-Address Code Generation (src/tac/tac.c)
+                      Linear quadruples: LOAD, STORE, ADD, SUB, MUL, DIV
+                                       |
+                                       v
+   [Phase 7]          Code Optimization (src/optimizer/optimizer.c)
+                      Compile-time Constant Propagation & Constant Folding
+                                       |
+                                       v
+   [Phase 8]          Target Code Generation (src/codegen/codegen.c)
+                      Traverses evaluated AST & Symbol Table to emit formatted JSON
+```
+
+---
+
+## 📂 Source Code Layout
+
+| Directory / File | Description | Lines of Code |
+|---|---|---|
+| `src/common.h` | Shared data types (`int`, `float`, `string`, `bool`) | ~35 lines |
+| `src/lexer/lexer.l` | Flex scanner recognizing keywords, literals, and comments | ~70 lines |
+| `src/parser/parser.y` | Bison LALR(1) grammar for declarations, blocks, expressions | ~110 lines |
+| `src/parser/ast.c` | Abstract Syntax Tree node constructors and indented printer | ~95 lines |
+| `src/symtab/symtab.c` | Linked-list Symbol Table with `insert`, `lookup`, and table print | ~95 lines |
+| `src/semantic/semantic.c` | 2-pass semantic validator (type check, duplicate & cycle checks) | ~140 lines |
+| `src/tac/tac.c` | Three-Address Code generation and quadruple printer | ~125 lines |
+| `src/optimizer/optimizer.c` | Constant propagation and compile-time arithmetic folding | ~180 lines |
+| `src/codegen/codegen.c` | JSON code generator emitting indented JSON output | ~75 lines |
+| `src/main.c` | Driver program orchestrating the 8 pipeline phases | ~170 lines |
+
+---
+
+## 🚀 Quick Start Guide
 
 ### Prerequisites
-- GCC (`gcc >= 11.0` supporting C11)
-- GNU Flex (`flex >= 2.6.4`)
-- GNU Bison (`bison >= 3.8.2`)
-- GNU Make (`make >= 4.3`)
-- Valgrind (optional, for memory auditing)
-
+Install standard compiler build tools:
 ```bash
-# Ubuntu/Debian installation
-sudo apt-get update
-sudo apt-get install -y build-essential flex bison valgrind
+sudo apt update
+sudo apt install -y build-essential flex bison
 ```
 
-### Building the Compiler
+### 1. Build the Compiler
 ```bash
-# Clean and build the release binary
 make clean && make
 ```
-The binary will be produced at `build/configlang`.
+The compiled executable is created at `build/configlang`.
 
-### Running Tests & Verification
+### 2. Run the Full 8-Phase Demonstration
 ```bash
-# Run the complete automated test suite (79 assertions across 5 phases)
-make test
-
-# Run full Valgrind memory leak and safety verification
-make memcheck
-
-# Run the 8-phase demonstration pipeline on examples/server.cfg
 make demo
 ```
+This executes `./build/configlang --phases examples/server.cfg` and prints the intermediate output of every phase (AST, Symbol Table, Raw TAC, Optimized TAC, and Final JSON).
+
+### 3. Run the Automated Test Suite
+```bash
+make test
+```
+Runs 24 automated test cases covering CLI flags, valid configs, golden JSON verification, and error detection.
 
 ---
 
-## 💻 CLI Usage
+## 💻 Usage & CLI Options
 
-```
-Usage: ./build/configlang [options] <input-file>
-
-Options:
-  -o, --output <file>       Write result to file (default: stdout)
-  -f, --format <json|yaml>  Output format: json (default) or yaml
-      --tokens              Dump token stream from lexical analysis
-      --ast                 Dump indented abstract syntax tree
-      --symtab              Dump symbol table with scope and types
-      --deps                Dump dependency graph edges
-      --tac                 Dump unoptimized Three-Address Code
-      --tac-opt             Dump optimized TAC and optimization stats
-      --phases              Enable all intermediate dumps with banner headers
-      --no-color            Disable ANSI color codes in diagnostics
-  -h, --help                Display command line usage and exit
-  -v, --version             Print compiler version (configlang 1.0.0)
-```
-
-### Examples
-
-Compile to JSON:
 ```bash
+# Basic compilation (prints JSON to terminal)
 ./build/configlang examples/server.cfg
-```
 
-Compile to YAML and save to a file:
-```bash
-./build/configlang -f yaml -o build/server.yaml examples/server.cfg
-```
+# Compile and save JSON to a file
+./build/configlang -o output.json examples/server.cfg
 
-Inspect compiler optimization and intermediate code:
-```bash
-./build/configlang --tac-opt examples/server.cfg
-```
+# Display all 8 compiler pipeline phases step-by-step
+./build/configlang --phases examples/server.cfg
 
-Inspect token stream:
-```bash
-./build/configlang --tokens examples/server.cfg
+# Show help message
+./build/configlang --help
+
+# Show version
+./build/configlang --version
 ```
 
 ---
 
-## 📋 The 8-Phase Compiler Pipeline
+## 📝 Example
 
-```mermaid
-graph TD
-    A[Source File .cfg] -->|Flex 2.6 Scanner| B[Token Stream]
-    B -->|Bison 3.8 LALR-1| C[Abstract Syntax Tree - AST]
-    C -->|Pass 1: Scope Builder| D[Hierarchical Symbol Table]
-    D -->|Pass 2: Type Checker & Cycle Detector| E[Validated Symbol Table & Dep Graph]
-    E -->|Topological TAC Emitter| F[Three-Address Code - TAC]
-    F -->|Constant Folder & Propagator| G[Optimized TAC]
-    G -->|Post-Optimization Validator| H[Validated Symtab Values]
-    H -->|Codegen Serializers| I[Target Output: JSON / YAML]
+### Input Configuration (`examples/server.cfg`)
+```cfg
+app_name : string = "ConfigLang Demo";
+base_port : int = 8000;
+
+server {
+    port : int = @base_port + 80;
+    workers : int = 4;
+    timeout_ms : int = 30 * 1000;
+    max_connections : int = @server.workers * 250;
+    debug : bool = false;
+}
+
+database {
+    host : string = "localhost";
+    port : int = 5432;
+    url : string = "postgres://" + @database.host + "/app";
+}
 ```
 
-1. **Phase 1 (Lexical Analysis)**: Pure reentrant Flex scanner transforms `.cfg` source characters into typed tokens with exact `(line, col, len)` spans.
-2. **Phase 2 (Syntax Analysis)**: Bison LALR(1) parser builds a clean tagged-union AST residing in chunked arena memory.
-3. **Phase 3 (Symbol Table Pass 1)**: Traverses AST to build hierarchical scope tree; registers all identifiers and blocks; rejects duplicate keys.
-4. **Phase 4 (Semantic Analysis Pass 2)**: Resolves references (`@path`), infers undeclared types, validates operators, and checks for dependency cycles using DFS 3-color marking.
-5. **Phase 5 (Intermediate Code Generation)**: Generates 3-Address Code (TAC) in topological order according to cross-variable dependencies.
-6. **Phase 6 (Optimization)**: Iteratively propagates known constants, folds compile-time arithmetic operations, and eliminates dead temporary registers.
-7. **Phase 7 (Validation)**: Validates evaluated values against declared numeric range constraints (`lo..hi`) and checks float finiteness.
-8. **Phase 8 (Code Generation)**: Serializes evaluated symbol hierarchy into standard JSON or YAML.
-
----
-
-## 🚨 Diagnostic Reference Codes
-
-| Code | Severity | Description |
-|:---:|:---:|:---|
-| **E101** | Error | Illegal / unrecognized source character |
-| **E102** | Error | Unterminated string literal |
-| **E103** | Error | Integer literal exceeds 64-bit bounds (`INT64_MIN`..`INT64_MAX`) |
-| **E104** | Error | Invalid escape sequence in string literal |
-| **E105** | Error | Unterminated multi-line block comment |
-| **E201** | Error | Syntax error (unexpected token, missing delimiter, malformed expression) |
-| **E301** | Error | Duplicate identifier declaration in same scope |
-| **E302** | Error | Type mismatch between declared type and expression value |
-| **E303** | Error | Evaluated runtime value violates declared range constraint `[lo..hi]` |
-| **E304** | Error | Invalid range constraint declaration (lower bound > upper bound, or non-numeric) |
-| **E305** | Error | Undefined variable reference (`@name`) |
-| **E306** | Error | Circular dependency cycle detected among variable references |
-| **E307** | Error | Invalid operand type for operator (e.g. string multiplication) |
-| **E308** | Error | Division by zero in constant expression |
-| **E309** | Error | Reference points to a scope block rather than a scalar value |
-| **E310** | Error | Integer arithmetic overflow during constant folding |
-| **E901** | Error | I/O error (input file not found or cannot be read) |
-| **W401** | Warning | Empty block declaration |
-| **W402** | Warning | Implicit numeric widening from `int` to `float` |
-
----
-
-## 📚 Syllabus Mapping: Nirma University PCD Lab Practicals (4CS501CC25)
-
-This innovative project directly unifies and demonstrates the concepts across our semester lab practicals:
-
-| Lab Practical (LOP) | Practical Objective & Topic | ConfigLang Implementation Module |
-|:---:|:---|:---|
-| **Exp 1 & 2** | **Lexical Analyzer using Lex/Flex**<br>Recognize tokens, strip comments, report line numbers | [`src/lexer/lexer.l`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer/lexer.l), [`src/lexer/lexer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/lexer/lexer.h) |
-| **Exp 3** | **Symbol Table Generation**<br>Identifier name, data type, scope, uniqueness verification | [`src/symtab/symtab.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab/symtab.c), [`src/symtab/symtab.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/symtab/symtab.h) |
-| **Exp 4** | **Syntax Analyzer using YACC/Bison**<br>Context-Free Grammar (CFG) validation & AST generation | [`src/parser/parser.y`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser/parser.y), [`src/parser/ast.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser/ast.c) |
-| **Exp 5** | **Error Recovery in Syntax Analyzer**<br>Panic-mode syntax error detection & recovery | [`src/parser/parser.y`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/parser/parser.y) (`error SEMI` recovery rule) |
-| **Exp 6** | **Semantic Analyzer**<br>Type checking, undeclared references, duplicate detection | [`src/semantic/semantic.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic/semantic.c), [`src/semantic/validator.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/semantic/validator.c) |
-| **Exp 7** | **Three-Address Code (TAC) Generator**<br>Generate linear intermediate code quadruples | [`src/tac/tac.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac/tac.c), [`src/tac/tac.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/tac/tac.h) |
-| **Exp 8** | **Code Generation**<br>Translate intermediate code to target format (JSON/YAML) | [`src/codegen/codegen.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen/codegen.c), [`src/codegen/codegen.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/codegen/codegen.h) |
-| **Exp 9** | **Code Optimization Techniques**<br>Constant propagation, constant folding, dead temporary removal | [`src/optimizer/optimizer.c`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer/optimizer.c), [`src/optimizer/optimizer.h`](file:///home/urva/Documents/Academics/Semester%20-%207/PCD/Innovative/src/optimizer/optimizer.h) |
-
----
-
-## 📁 Repository Structure
-
-```
-├── Makefile                 # Portable GNU Makefile (all, test, memcheck, demo, clean)
-├── README.md                # Project documentation and syllabus guide
-├── docs/                    # Formal engineering documentation
-│   ├── SRS.md               # Software Requirements Specification
-│   ├── DESIGN.md            # Architecture and implementation design document
-│   ├── GRAMMAR.md           # Formal lexical and context-free grammar specification
-│   ├── TEST_PLAN.md         # Verification matrix and test traceability
-│   ├── VIVA_NOTES.md        # Comprehensive 25+ viva preparation Q&A guide
-│   └── DECISIONS.md         # Architecture Decision Records (ADRs)
-├── src/                     # C11 Compiler Source Code (Modular Pipeline Architecture)
-│   ├── main.c               # Compiler CLI driver & pipeline orchestrator
-│   ├── common/              # Common runtime infrastructure (Arena, Diag, Util)
-│   │   ├── arena.h, arena.c # 8-byte aligned chunked arena allocator
-│   │   ├── util.h, util.c   # Safe allocation wrappers, dynamic string buffers, file loader
-│   │   └── diag.h, diag.c   # Diagnostic reporting engine with ANSI carets & gutters
-│   ├── lexer/               # [Exp 1 & 2] Lexical Analyzer (Flex scanner)
-│   │   └── lexer.l, lexer.h # Token recognition, comment elimination & location tracking
-│   ├── parser/              # [Exp 4 & 5] Syntax Analyzer, AST & Error Recovery (Bison)
-│   │   ├── parser.y, parser.h# Bison LALR(1) grammar (%expect 0, error recovery)
-│   │   └── ast.h, ast.c     # Tagged-union AST node hierarchy & tree dumper
-│   ├── symtab/              # [Exp 3] Symbol Table Management
-│   │   └── symtab.h, symtab.c# Hierarchical scope tree & hash table
-│   ├── semantic/            # [Exp 6] Semantic Analyzer & Range Validator
-│   │   ├── semantic.h, semantic.c# Type checking, undeclared/duplicate check, DFS cycles
-│   │   └── validator.h, validator.c# Range constraint and float finiteness validation
-│   ├── tac/                 # [Exp 7] Three-Address Code (TAC) Generator
-│   │   └── tac.h, tac.c     # Linear IR quadruples in topological order
-│   ├── optimizer/           # [Exp 9] Code Optimization
-│   │   └── optimizer.h, optimizer.c# Constant propagation, constant folding & dead temps
-│   └── codegen/             # [Exp 8] Target Code Generation
-│       └── codegen.h, codegen.c# Standard 2-space indented JSON & YAML output serializers
-├── examples/                # Example configurations
-│   ├── server.cfg           # Comprehensive valid server configuration
-│   └── server.json          # Golden JSON output
-└── tests/                   # Automated Test Suite
-    ├── run_tests.sh         # Test runner executing 79 assertions
-    ├── valid/               # Valid configuration test cases (14 cases)
-    └── invalid/             # Negative error test cases with .expected files (35 cases)
+### Output JSON (`build/server.json`)
+```json
+{
+  "app_name": "ConfigLang Demo",
+  "base_port": 8000,
+  "server": {
+    "port": 8080,
+    "workers": 4,
+    "timeout_ms": 30000,
+    "max_connections": 1000,
+    "debug": false
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "url": "postgres://localhost/app"
+  }
+}
 ```
 
+Notice how `@base_port + 80` was folded to `8080`, `30 * 1000` to `30000`, and strings concatenated to `"postgres://localhost/app"` at compile time!
+
 ---
 
-## 📜 License
-Educational project developed for PCD (Principles of Compiler Design, 4CS501CC25) at Institute of Technology, Nirma University. All rights reserved by authors Urva Gandhi and Rakshit Gajnotar.
+## 🎓 Mapping to PCD Syllabus (Nirma University)
+
+| Experiment | Syllabus Topic | Implementation in ConfigLang |
+|---|---|---|
+| **Exp 1 & 2** | Lexical Analysis using Flex | `src/lexer/lexer.l` |
+| **Exp 3** | Symbol Table Management | `src/symtab/symtab.c` & `symtab.h` |
+| **Exp 4 & 5** | Syntax Analysis using Bison & AST | `src/parser/parser.y` & `src/parser/ast.c` |
+| **Exp 6** | Semantic Analysis & Type Checking | `src/semantic/semantic.c` |
+| **Exp 7** | Intermediate Code Generation (TAC) | `src/tac/tac.c` & `src/tac/tac.h` |
+| **Exp 8** | Code Generation | `src/codegen/codegen.c` (JSON emitter) |
+| **Exp 9** | Code Optimization | `src/optimizer/optimizer.c` (Constant Folding & Propagation) |

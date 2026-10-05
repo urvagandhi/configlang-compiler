@@ -1,344 +1,198 @@
 /**
  * ============================================================================
- * ConfigLang Compiler Driver (main.c)
+ * ConfigLang - Student Compiler Project (main.c)
  * ============================================================================
  * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
  *
- * HOW THIS COMPILER WORKS (The 6-Phase Pipeline):
- *   1. Lexical Analysis   (src/lexer/)     -> Exp 1 & 2: Tokenizes input text
- *   2. Syntax Analysis    (src/parser/)    -> Exp 4 & 5: Parses tokens into AST
- *   3. Symbol Table       (src/symtab/)    -> Exp 3: Records symbols and scopes
- *   4. Semantic Analysis  (src/semantic/)  -> Exp 6: Type & reference checking
- *   5. Intermediate Code  (src/tac/)       -> Exp 7: Generates Three-Address Code
- *   6. Code Optimization  (src/optimizer/) -> Exp 9: Constant folding/propagation
- *   7. Range Validation   (src/semantic/)  -> Value bounds checking
- *   8. Code Generation    (src/codegen/)   -> Exp 8: Emits JSON or YAML target
+ * THE 8 COMPILER PHASES:
+ *   Phase 1: Lexical Analysis   (Flex scanner in src/lexer/lexer.l)
+ *   Phase 2: Syntax Analysis    (Bison parser in src/parser/parser.y)
+ *   Phase 3: Abstract Syntax Tree (src/parser/ast.c)
+ *   Phase 4: Symbol Table       (src/symtab/symtab.c)
+ *   Phase 5: Semantic Analysis  (src/semantic/semantic.c)
+ *   Phase 6: Three-Address Code (src/tac/tac.c)
+ *   Phase 7: Code Optimization  (src/optimizer/optimizer.c)
+ *   Phase 8: Code Generation    (src/codegen/codegen.c)
  * ============================================================================
  */
 
-#include "arena.h"
+#include "common.h"
 #include "ast.h"
-#include "codegen.h"
-#include "diag.h"
-#include "lexer.h"
-#include "optimizer.h"
-#include "parser.h"
-#include "semantic.h"
 #include "symtab.h"
+#include "semantic.h"
 #include "tac.h"
-#include "util.h"
-#include "validator.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "optimizer.h"
+#include "codegen.h"
 
-#define CONFIGLANG_VERSION "configlang 1.0.0"
+extern FILE *yyin;
+extern int yyparse(void);
+extern ASTNode *root_ast;
 
-/** Target output formatting mode: JSON or YAML. */
-typedef enum output_format {
-    FORMAT_JSON = 0,
-    FORMAT_YAML = 1
-} output_format_t;
-
-/** Holds compiler configuration flags passed by the user in CLI. */
-typedef struct compiler_options {
-    const char *input_path;   /* Input .cfg source file */
-    const char *output_path;  /* Output file path (or NULL for stdout) */
-    output_format_t format;   /* JSON or YAML */
-    bool dump_tokens;         /* --tokens: print token stream table */
-    bool dump_ast;            /* --ast: print Abstract Syntax Tree */
-    bool dump_symtab;         /* --symtab: print Symbol Table */
-    bool dump_deps;           /* --deps: print symbol dependency edges */
-    bool dump_tac;            /* --tac: print raw Three-Address Code */
-    bool dump_tac_opt;        /* --tac-opt: print optimized Three-Address Code */
-    bool dump_phases;         /* --phases: show banner for each compilation step */
-    bool no_color;            /* --no-color: disable terminal ANSI colors */
-} compiler_options_t;
-
-/** Print simple CLI help instructions to terminal. */
 static void print_usage(const char *prog_name) {
-    printf("Usage: %s [options] <input-file>\n\n", prog_name);
+    printf("ConfigLang: Typed Configuration Language Compiler\n");
+    printf("Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)\n\n");
+    printf("Usage:\n");
+    printf("  %s [options] <input.cfg>\n\n", prog_name);
     printf("Options:\n");
-    printf("  -o, --output <file>       write result to file (default: stdout)\n");
-    printf("  -f, --format <json|yaml>  output format (default: json)\n");
-    printf("      --tokens              dump token stream\n");
-    printf("      --ast                 dump abstract syntax tree\n");
-    printf("      --symtab              dump symbol table\n");
-    printf("      --deps                dump dependency edges\n");
-    printf("      --tac                 dump unoptimized TAC\n");
-    printf("      --tac-opt             dump optimized TAC and statistics\n");
-    printf("      --phases              enable all dump flags above, with banners\n");
-    printf("      --no-color            disable ANSI colour\n");
-    printf("  -h, --help                usage\n");
-    printf("  -v, --version             print \"%s\"\n", CONFIGLANG_VERSION);
+    printf("  --phases          Display all intermediate compiler phases\n");
+    printf("  -o <file>         Write output to file (default: stdout)\n");
+    printf("  -h, --help        Show this help message\n");
+    printf("  -v, --version     Show version\n");
 }
 
-/** Check and set phase inspection flags like --ast or --tac. */
-static bool parse_dump_flags(compiler_options_t *opts, const char *arg) {
-    if (strcmp(arg, "--tokens") == 0) {
-        opts->dump_tokens = true;
-    } else if (strcmp(arg, "--ast") == 0) {
-        opts->dump_ast = true;
-    } else if (strcmp(arg, "--symtab") == 0) {
-        opts->dump_symtab = true;
-    } else if (strcmp(arg, "--deps") == 0) {
-        opts->dump_deps = true;
-    } else if (strcmp(arg, "--tac") == 0) {
-        opts->dump_tac = true;
-    } else if (strcmp(arg, "--tac-opt") == 0) {
-        opts->dump_tac_opt = true;
-    } else if (strcmp(arg, "--phases") == 0) {
-        opts->dump_phases = true;
-        opts->dump_tokens = opts->dump_ast = opts->dump_symtab = true;
-        opts->dump_deps = opts->dump_tac = opts->dump_tac_opt = true;
-    } else if (strcmp(arg, "--no-color") == 0) {
-        opts->no_color = true;
-    } else {
-        return false;
-    }
-    return true;
-}
-
-/** Parse a single command-line option flag. */
-static bool parse_arg_options(int argc, char **argv, int *idx,
-                             compiler_options_t *opts) {
-    const char *arg = argv[*idx];
-    if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-        print_usage(argv[0]);
-        exit(EXIT_SUCCESS);
-    }
-    if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
-        printf("%s\n", CONFIGLANG_VERSION);
-        exit(EXIT_SUCCESS);
-    }
-    if ((strcmp(arg, "-o") == 0 || strcmp(arg, "--output") == 0) && *idx + 1 < argc) {
-        opts->output_path = argv[++(*idx)];
-        return true;
-    }
-    if ((strcmp(arg, "-f") == 0 || strcmp(arg, "--format") == 0) && *idx + 1 < argc) {
-        const char *fmt = argv[++(*idx)];
-        if (strcmp(fmt, "yaml") == 0) {
-            opts->format = FORMAT_YAML;
-        } else if (strcmp(fmt, "json") != 0) {
-            fprintf(stderr, "error: unsupported format '%s' (choose json or yaml)\n", fmt);
-            exit(2);
-        }
-        return true;
-    }
-    return parse_dump_flags(opts, arg);
-}
-
-/** Parse all command-line arguments and validate input file presence. */
-static compiler_options_t parse_arguments(int argc, char **argv) {
-    compiler_options_t opts = {0};
-    opts.format = FORMAT_JSON;
-    for (int i = 1; i < argc; ++i) {
-        if (argv[i][0] == '-') {
-            if (!parse_arg_options(argc, argv, &i, &opts)) {
-                fprintf(stderr, "error: unrecognized option '%s'\n", argv[i]);
-                print_usage(argv[0]);
-                exit(2);
-            }
-        } else {
-            if (opts.input_path != NULL) {
-                fprintf(stderr, "error: only one input file allowed\n");
-                exit(2);
-            }
-            opts.input_path = argv[i];
-        }
-    }
-    if (opts.input_path == NULL) {
-        fprintf(stderr, "error: no input file specified\n");
-        print_usage(argv[0]);
-        exit(2);
-    }
-    return opts;
-}
-
-/**
- * ============================================================================
- * MAIN COMPILER ENTRY POINT
- * ============================================================================
- * Coordinates each phase sequentially:
- *   Read file -> Lex -> Parse -> SymTab -> Semantic -> TAC -> Opt -> Codegen
- */
 int main(int argc, char **argv) {
-    // ------------------------------------------------------------------------
-    // Step 0: Parse Command Line Arguments & Read Source File
-    // ------------------------------------------------------------------------
-    compiler_options_t opts = parse_arguments(argc, argv);
-    size_t file_size = 0;
-    char *source = util_read_file(opts.input_path, &file_size);
-    if (source == NULL) {
-        fprintf(stderr, "%s:0:0: error[E901]: cannot read input file '%s'\n",
-                opts.input_path, opts.input_path);
-        fprintf(stderr, "1 error, 0 warnings generated.\n");
-        return 2;
+    if (argc < 2) {
+        print_usage(argv[0]);
+        return 1;
     }
 
-    bool use_color = !opts.no_color && isatty(STDERR_FILENO);
-    diag_collector_t diags = diag_create(source, use_color);
-    arena_t *arena = arena_create(0);
+    bool show_phases = false;
+    const char *input_path = NULL;
+    const char *output_path = NULL;
 
-    // ------------------------------------------------------------------------
-    // Step 1: Lexical Analysis (Flex Scanner - Exp 1 & 2)
-    // Converts raw text into tokens (IDENT, INT_LIT, STRING_LIT, keywords).
-    // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 1: Lexical Analysis] ===\n");
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            printf("ConfigLang 1.0 (PCD Innovative Assignment)\n");
+            return 0;
+        } else if (strcmp(argv[i], "--phases") == 0) {
+            show_phases = true;
+        } else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
+            output_path = argv[++i];
+        } else if (argv[i][0] != '-') {
+            input_path = argv[i];
+        }
     }
 
-    lexer_scan(source, opts.input_path, &diags, arena, opts.dump_tokens);
-    if (diags.error_count > 0) {
-        diag_render_all(&diags);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
+    if (!input_path) {
+        fprintf(stderr, "Error: No input configuration file specified.\n");
+        return 1;
+    }
+
+    yyin = fopen(input_path, "r");
+    if (!yyin) {
+        fprintf(stderr, "Error: Cannot open file '%s'\n", input_path);
         return 1;
     }
 
     // ------------------------------------------------------------------------
-    // Step 2: Syntax Analysis & AST Construction (Bison Parser - Exp 4 & 5)
-    // Verifies syntax and constructs an Abstract Syntax Tree (AST).
+    // Step 1 & 2: Lexical Analysis & Syntax Analysis (Flex & Bison)
     // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 2: Syntax Analysis & AST Construction] ===\n");
+    if (show_phases) {
+        printf("==========================================================\n");
+        printf("=== [Phase 1 & 2: Lexical Analysis & Parsing (AST)] ===\n");
+        printf("==========================================================\n");
     }
 
-    ast_node_t *ast = parser_parse(source, opts.input_path, &diags, arena);
+    if (yyparse() != 0) {
+        fprintf(stderr, "Parsing failed due to syntax errors.\n");
+        fclose(yyin);
+        return 1;
+    }
+    fclose(yyin);
 
-    if (opts.dump_ast && ast != NULL) {
-        ast_dump(ast, stderr);
+    if (!root_ast) {
+        if (output_path) {
+            FILE *f = fopen(output_path, "w");
+            if (f) { fprintf(f, "{\n}\n"); fclose(f); }
+        } else {
+            printf("{\n}\n");
+        }
+        return 0;
     }
 
-    if (diags.error_count > 0 || ast == NULL) {
-        diag_render_all(&diags);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
+    if (show_phases) {
+        printf("Constructed Abstract Syntax Tree (AST):\n");
+        ast_print(root_ast, 0);
+        printf("\n");
+    }
+
+    // ------------------------------------------------------------------------
+    // Step 3 & 4: Symbol Table & Semantic Analysis
+    // ------------------------------------------------------------------------
+    if (show_phases) {
+        printf("==========================================================\n");
+        printf("=== [Phase 3 & 4: Symbol Table & Semantic Analysis] ===\n");
+        printf("==========================================================\n");
+    }
+
+    symtab_init();
+    int errors = semantic_check(root_ast);
+    if (errors > 0) {
+        fprintf(stderr, "Compilation aborted with %d semantic error(s).\n", errors);
         return 1;
     }
 
-    // ------------------------------------------------------------------------
-    // Step 3: Symbol Table Construction - Pass 1 (Exp 3)
-    // Inserts all variable and block names into the hash table.
-    // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 3: Symbol Table Construction (Pass 1)] ===\n");
-    }
-
-    symtab_t *st = symtab_create(arena, opts.input_path);
-    symtab_build_pass1(st, ast, &diags);
-
-    // ------------------------------------------------------------------------
-    // Step 4: Semantic Analysis - Pass 2 (Exp 6)
-    // Checks type compatibility, validates references, and detects cycles.
-    // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 4: Semantic Analysis (Pass 2)] ===\n");
-    }
-
-    sem_context_t sem_ctx = { st, &diags, arena, NULL, NULL };
-    semantic_analyze(&sem_ctx, ast);
-
-    if (opts.dump_symtab) {
-        symtab_dump(st, stderr);
-    }
-    if (opts.dump_deps) {
-        semantic_dump_deps(&sem_ctx, stderr);
-    }
-
-    if (diags.error_count > 0) {
-        diag_render_all(&diags);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
-        return 1;
+    if (show_phases) {
+        printf("Populated Symbol Table:\n");
+        symtab_print();
+        printf("\n");
     }
 
     // ------------------------------------------------------------------------
-    // Step 5: Intermediate Code Generation (Three-Address Code - Exp 7)
-    // Lowers expressions into simple quadruples (t1 = a + b).
+    // Step 5: Three-Address Code (TAC) Generation
     // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 5: Three-Address Code (TAC) Generation] ===\n");
+    if (show_phases) {
+        printf("==========================================================\n");
+        printf("=== [Phase 5: Three-Address Code (TAC) Generation] ===\n");
+        printf("==========================================================\n");
     }
 
-    tac_program_t *tac_prog = tac_generate(arena, st);
-    if (opts.dump_tac && tac_prog != NULL) {
-        tac_dump(tac_prog, stderr);
-    }
+    tac_init();
+    tac_generate(root_ast, "");
 
-    // ------------------------------------------------------------------------
-    // Step 6: Code Optimization (Constant Folding & Propagation - Exp 9)
-    // Evaluates compile-time constants (e.g., 2 + 3 -> 5) and removes temps.
-    // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 6: Constant Propagation & Folding Optimization] ===\n");
-    }
-
-    opt_stats_t opt_stats = optimizer_run(tac_prog, &diags);
-    if (opts.dump_tac_opt && tac_prog != NULL) {
-        optimizer_dump(tac_prog, &opt_stats, stderr);
-    }
-
-    if (diags.error_count > 0) {
-        diag_render_all(&diags);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
-        return 1;
+    if (show_phases) {
+        printf("Generated Raw TAC Instructions:\n");
+        tac_print();
+        printf("\n");
     }
 
     // ------------------------------------------------------------------------
-    // Step 7: Value & Range Validation
-    // Verifies computed values against user range bounds like (1024..65535).
+    // Step 6: Code Optimization (Constant Folding & Propagation)
     // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 7: Value & Range Validation] ===\n");
+    if (show_phases) {
+        printf("==========================================================\n");
+        printf("=== [Phase 6: Code Optimization (Constant Folding)] ===\n");
+        printf("==========================================================\n");
     }
 
-    validator_validate(tac_prog, st, &diags);
+    int folds = optimize_tac();
 
-    if (diags.error_count > 0) {
-        diag_render_all(&diags);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
-        return 1;
-    }
-
-    // ------------------------------------------------------------------------
-    // Step 8: Target Code Generation (JSON / YAML - Exp 8)
-    // Emits the final clean output in the user's requested format.
-    // ------------------------------------------------------------------------
-    if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 8: Code Generation (%s)] ===\n",
-                opts.format == FORMAT_YAML ? "YAML" : "JSON");
-    }
-
-    codegen_format_t fmt = (opts.format == FORMAT_YAML) ? CODEGEN_YAML : CODEGEN_JSON;
-    if (!codegen_emit_file(st, fmt, opts.output_path)) {
-        fprintf(stderr, "error: failed to write output to '%s'\n", opts.output_path);
-        diag_destroy(&diags);
-        arena_destroy(arena);
-        free(source);
-        return 2;
+    if (show_phases) {
+        printf("Optimized TAC (%d constants folded at compile time):\n", folds);
+        optimizer_print();
+        printf("\n");
     }
 
     // ------------------------------------------------------------------------
-    // Step 9: Cleanup & Exit
-    // Free all allocated memory blocks cleanly to avoid memory leaks.
+    // Step 7: Target Code Generation (JSON)
     // ------------------------------------------------------------------------
-    if (diags.count > 0) {
-        diag_render_all(&diags);
+    if (show_phases) {
+        printf("==========================================================\n");
+        printf("=== [Phase 7: Target Code Generation (JSON)] ===\n");
+        printf("==========================================================\n");
     }
-    int exit_code = (diags.error_count > 0) ? 1 : 0;
 
-    diag_destroy(&diags);
-    arena_destroy(arena);
-    free(source);
-    return exit_code;
+    FILE *out = stdout;
+    if (output_path) {
+        out = fopen(output_path, "w");
+        if (!out) {
+            fprintf(stderr, "Error: Could not open output file '%s'\n", output_path);
+            return 1;
+        }
+    }
+
+    codegen_json(root_ast, out);
+
+    if (output_path) {
+        fclose(out);
+        if (show_phases) {
+            printf("Output successfully written to '%s'\n", output_path);
+        }
+    }
+
+    return 0;
 }
