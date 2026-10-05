@@ -10,6 +10,7 @@
 
 #include "arena.h"
 #include "diag.h"
+#include "lexer.h"
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -150,16 +151,16 @@ int main(int argc, char **argv) {
     diag_collector_t diags = diag_create(source, use_color);
     arena_t *arena = arena_create(0);
 
-    /* Scaffold M0 driver verification */
     if (opts.dump_phases) {
-        fprintf(stderr, "=== [Phase 0: Scaffold Initialized] ===\n");
-        fprintf(stderr, "Source loaded: %zu bytes\n", file_size);
+        fprintf(stderr, "=== [Phase 1: Lexical Analysis] ===\n");
     }
 
-    int exit_code = (diags.error_count > 0) ? 1 : 0;
+    lexer_scan(source, opts.input_path, &diags, arena, opts.dump_tokens);
+
     if (diags.count > 0) {
         diag_render_all(&diags);
     }
+    int exit_code = (diags.error_count > 0) ? 1 : 0;
 
     diag_destroy(&diags);
     arena_destroy(arena);
