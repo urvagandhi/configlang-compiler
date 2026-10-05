@@ -1,19 +1,19 @@
 # ConfigLang Compiler Makefile
-# Course: PCD (Compiler Design), 4CS501CC25
+# Course: PCD (Principles of Compiler Design - 4CS501CC25)
 # Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
 
 CC = gcc
 CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -g
 FLEX_CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -g -Wall -Wextra -Wno-sign-compare -Wno-unused-function -Wno-unused-parameter -Wno-conversion
 BISON_CFLAGS = -std=c11 -D_POSIX_C_SOURCE=200809L -g -Wall -Wextra -Wno-conversion -Wno-sign-compare
-INCLUDES = -Isrc -Isrc/common -Isrc/lexer -Isrc/parser -Isrc/ast -Isrc/symtab -Isrc/semantic -Isrc/tac -Isrc/optimizer -Isrc/validator -Isrc/codegen -I$(BUILD_DIR) -I.
+INCLUDES = -Isrc -Isrc/common -Isrc/lexer -Isrc/parser -Isrc/symtab -Isrc/semantic -Isrc/tac -Isrc/optimizer -Isrc/codegen -I$(BUILD_DIR) -I.
 
 BUILD_DIR = build
 BIN = $(BUILD_DIR)/configlang
 
 SRCS = src/common/util.c src/common/arena.c src/common/diag.c \
-       src/ast/ast.c src/symtab/symtab.c src/semantic/semantic.c \
-       src/tac/tac.c src/optimizer/optimizer.c src/validator/validator.c \
+       src/parser/ast.c src/symtab/symtab.c src/semantic/semantic.c \
+       src/semantic/validator.c src/tac/tac.c src/optimizer/optimizer.c \
        src/codegen/codegen.c src/main.c
 OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS)) $(BUILD_DIR)/parser.o $(BUILD_DIR)/lexer.o
 
@@ -22,9 +22,9 @@ OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS)) $(BUILD_DIR)/parser.o $(BUIL
 all: directories $(BIN)
 
 directories:
-	@mkdir -p $(BUILD_DIR)/common $(BUILD_DIR)/ast $(BUILD_DIR)/symtab \
+	@mkdir -p $(BUILD_DIR)/common $(BUILD_DIR)/parser $(BUILD_DIR)/symtab \
 	          $(BUILD_DIR)/semantic $(BUILD_DIR)/tac $(BUILD_DIR)/optimizer \
-	          $(BUILD_DIR)/validator $(BUILD_DIR)/codegen tests/valid tests/invalid examples
+	          $(BUILD_DIR)/codegen tests/valid tests/invalid examples
 
 $(BUILD_DIR)/%.o: src/%.c | directories
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
