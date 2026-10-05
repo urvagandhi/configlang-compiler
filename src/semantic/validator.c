@@ -1,17 +1,25 @@
 /**
- * @file validator.c
- * @brief Implementation of range constraint and float finiteness validation.
- * @module validator
- * @phase Validation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Value and Range Constraint Validator (validator.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT THIS FILE DOES:
+ *   After optimization computes final values for all variables, this phase:
+ *     1. Checks if the value falls within user-specified range bounds:
+ *        e.g., port: int(1024..65535) = 8080;
+ *        Reports error E303 if value < min or value > max.
+ *     2. Checks that floating-point numbers are finite (not NaN or Infinity, E310).
+ *     3. Stores the final verified value into the symbol table for codegen.
+ * ============================================================================
  */
 
 #include "validator.h"
 #include <inttypes.h>
 #include <math.h>
 
+/** Check integer value against declared [lo..hi] bounds */
 static void check_range_int(symbol_t *sym, const tac_instr_t *ins,
                             diag_collector_t *diags) {
     int64_t val = sym->final_val.val.ival;

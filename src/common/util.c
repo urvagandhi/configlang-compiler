@@ -1,11 +1,18 @@
 /**
- * @file util.c
- * @brief Implementation of memory safety wrappers, string buffer, and file I/O.
- * @module util
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Helper Utilities Implementation (util.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT THIS FILE IMPLEMENTS:
+ *   1. Memory wrappers (util_xmalloc, util_xcalloc, util_xrealloc):
+ *      Standard malloc/calloc/realloc with automatic out-of-memory checks.
+ *   2. Dynamic String Buffer (strbuf_t):
+ *      Grows dynamically like a C++ std::string for accumulating string characters.
+ *   3. File Reader (util_read_file):
+ *      Loads the entire source file into an in-memory null-terminated buffer.
+ * ============================================================================
  */
 
 #include "util.h"

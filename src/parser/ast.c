@@ -1,11 +1,22 @@
 /**
- * @file ast.c
- * @brief Implementation of Abstract Syntax Tree node constructors and dumper.
- * @module ast
- * @phase Syntax Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Abstract Syntax Tree Constructors & Pretty-Printer (ast.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 4: Syntax Analyzer using Yacc / Bison (AST node creation)
+ *
+ * WHAT THIS FILE DOES:
+ *   Contains helper functions called by the Bison parser actions to create
+ *   and link AST nodes into an in-memory tree:
+ *     - ast_create_program() : Root container of the file
+ *     - ast_create_block()   : Nested section (e.g. server { ... })
+ *     - ast_create_decl()    : Variable declaration (name : type = expr)
+ *     - ast_create_binary()  : Binary arithmetic operations (+, -, *, /)
+ *     - ast_dump()           : Pretty-prints the tree when --ast is passed
+ * ============================================================================
  */
 
 #include "ast.h"

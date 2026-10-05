@@ -1,11 +1,18 @@
 /**
- * @file diag.c
- * @brief Implementation of diagnostic collector and caret formatter.
- * @module diag
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Compiler Diagnostic Reporting Engine (diag.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * HOW ERROR REPORTING WORKS:
+ *   1. diag_error() / diag_warning() record errors with location (line, col).
+ *   2. diag_sort() orders errors by line and column number.
+ *   3. diag_render_all() prints each diagnostic with:
+ *      - Filename, line, column, error code (e.g. server.cfg:5:28: error[E305])
+ *      - The source code line snippet
+ *      - A colored caret underline (^^^^) pointing directly to the offending token
+ * ============================================================================
  */
 
 #include "diag.h"
