@@ -1,11 +1,18 @@
 /**
- * @file util.h
- * @brief Common utility functions and dynamic string buffer.
- * @module util
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Helper Utilities (util.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT IS THIS & WHY DO WE NEED IT?
+ *   Contains standard helper functions used across all compiler phases:
+ *     1. Safe memory allocators (util_xmalloc, util_xcalloc) that check for
+ *        out-of-memory errors automatically.
+ *     2. Dynamic string buffer (strbuf_t) for building strings incrementally
+ *        (used when scanning string literals in the lexer).
+ *     3. Safe file reader (util_read_file) to load the .cfg input file.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_UTIL_H
@@ -15,7 +22,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/** Initial default capacity for dynamic string buffers. */
+/** Initial capacity for dynamic string buffers. */
 #define UTIL_STRBUF_INIT_CAP 64U
 
 /**

@@ -1,11 +1,18 @@
 /**
- * @file parser.h
- * @brief Public interface to the ConfigLang Bison LALR(1) parser.
- * @module parser
- * @phase Syntax Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Syntax Analyzer Interface (parser.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 4: Design and implementation of Syntax Analyzer using Yacc / Bison
+ *   - Experiment 5: Syntax Error Handling and Recovery using Error Productions
+ *
+ * WHAT THIS FILE DOES:
+ *   Provides the entry point parser_parse() which invokes the Bison LALR(1)
+ *   parser to construct the Abstract Syntax Tree (AST).
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_PARSER_H

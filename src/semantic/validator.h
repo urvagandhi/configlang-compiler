@@ -1,11 +1,16 @@
 /**
- * @file validator.h
- * @brief Range constraint validation and final value recording.
- * @module validator
- * @phase Validation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Value and Range Constraint Validator (validator.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT THIS FILE DOES:
+ *   Validates evaluated values against user-specified range bounds:
+ *     e.g., port: int(1024..65535) = 8080;
+ *   Reports E303 if the value falls outside [min..max].
+ *   Also checks floating-point numbers to reject NaN or Infinity (E310).
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_VALIDATOR_H

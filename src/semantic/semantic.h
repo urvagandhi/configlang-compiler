@@ -1,11 +1,20 @@
 /**
- * @file semantic.h
- * @brief Semantic analysis pass: type checking, references, and cycle detection.
- * @module semantic
- * @phase Semantic Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Semantic Analyzer Interface (semantic.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 6: Design and implementation of Semantic Analyzer
+ *     (Type Checking and Scope Verification).
+ *
+ * WHAT SEMANTIC CHECKS ARE PERFORMED:
+ *   1. Type Checking: Compatible operands for operators (+, -, *, /)
+ *   2. Implicit Widening: Safe conversion from int to float with W402 warning
+ *   3. Reference Resolution: Validates @path references exist in symbol table
+ *   4. Cycle Detection: DFS 3-color graph traversal to detect circular references
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_SEMANTIC_H

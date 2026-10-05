@@ -1,11 +1,24 @@
 /**
- * @file optimizer.c
- * @brief Implementation of constant folding, propagation, and dead temp elimination.
- * @module optimizer
- * @phase Optimization
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Code Optimizer Implementation (optimizer.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 9: Design and implementation of Code Optimizer for given
+ *     Three Address Code.
+ *
+ * HOW THE OPTIMIZER RUNS IN A SINGLE PASS:
+ *   1. Maintains a map of known constants (const_map_t).
+ *   2. For each TAC instruction:
+ *      - Replaces temporary or variable arguments with known constants (propagation).
+ *      - If both arguments are constants:
+ *          Calls fold_binary() to compute the result at compile time (folding).
+ *          Checks for division by zero (E308) and integer overflow (E310).
+ *          Records the result in the constant map and removes the instruction.
+ *      - If a STORE has a constant value: records final value for the variable.
+ * ============================================================================
  */
 
 #include "optimizer.h"

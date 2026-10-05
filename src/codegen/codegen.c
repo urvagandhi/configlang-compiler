@@ -1,11 +1,21 @@
 /**
- * @file codegen.c
- * @brief Implementation of JSON and YAML configuration file generator.
- * @module codegen
- * @phase Code Generation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Target Code Generator Implementation (codegen.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 8: Design and implementation of Code Generator for target
+ *     machine / target format (JSON and YAML).
+ *
+ * HOW CODE GENERATION WORKS:
+ *   1. print_json_object(): Recursively walks the symbol table scope tree,
+ *      printing nested keys, values, commas, and indentation in JSON format.
+ *   2. print_yaml_node(): Recursively walks the scope tree and outputs
+ *      clean YAML with 2-space indentation.
+ *   3. Strings are properly escaped (newlines, quotes, tabs, backslashes).
+ * ============================================================================
  */
 
 #include "codegen.h"

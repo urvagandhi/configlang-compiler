@@ -1,11 +1,20 @@
 /**
- * @file optimizer.h
- * @brief TAC optimizer: constant propagation, folding, and dead temporary removal.
- * @module optimizer
- * @phase Optimization
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Code Optimizer Interface (optimizer.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 9: Design and implementation of Code Optimizer for given
+ *     Three Address Code.
+ *
+ * OPTIMIZATIONS PERFORMED:
+ *   1. Constant Propagation: Substitutes known constant values into operands.
+ *   2. Constant Folding: Precomputes arithmetic expressions at compile time:
+ *        t1 = 2 + 3  -->  t1 = 5
+ *   3. Dead Code Elimination: Drops unused temporary instructions once folded.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_OPTIMIZER_H

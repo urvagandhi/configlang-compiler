@@ -1,12 +1,27 @@
 %{
 /**
- * @file parser.y
- * @brief Bison LALR(1) parser for ConfigLang.
- * @module parser
- * @phase Syntax Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Bison LALR(1) Syntax Analyzer (parser.y)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 4: Syntax Analyzer using YACC / Bison
+ *   - Experiment 5: Syntax Error Handling and Recovery in YACC
+ *
+ * GRAMMAR PRODUCTIONS (BNF):
+ *   program     -> item_list
+ *   item_list   -> empty | item_list item
+ *   item        -> block | declaration | error ';'  <-- (Exp 5 Error Recovery)
+ *   block       -> IDENT '{' item_list '}'
+ *   declaration -> IDENT ':' type [range] '=' expr ';'
+ *                | IDENT '=' expr ';'
+ *   expr        -> expr ('+' | '-' | '*' | '/') expr
+ *                | '-' expr
+ *                | '(' expr ')'
+ *                | INT | FLOAT | STRING | BOOL | '@' path
+ * ============================================================================
  */
 
 #include "arena.h"

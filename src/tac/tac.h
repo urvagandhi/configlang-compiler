@@ -1,11 +1,23 @@
 /**
- * @file tac.h
- * @brief Three-Address Code (TAC) intermediate representation interface.
- * @module tac
- * @phase Intermediate Code Generation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Three-Address Code (TAC) Interface (tac.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 7: Design and implementation of Intermediate Code Generator
+ *     (Three Address Code) for given expressions.
+ *
+ * WHAT IS THREE-ADDRESS CODE (TAC)?
+ *   TAC is a linear intermediate representation where each instruction has
+ *   at most one operator and at most three operands:
+ *     Example: x = (a + b) * c
+ *     Becomes:
+ *       t1 = a + b      (arg1 + arg2 -> result)
+ *       t2 = t1 * c     (arg1 * arg2 -> result)
+ *       STORE x, t2     (store result into variable)
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_TAC_H

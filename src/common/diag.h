@@ -1,11 +1,18 @@
 /**
- * @file diag.h
- * @brief Diagnostic collection, sorting, and caret rendering engine.
- * @module diag
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Compiler Diagnostic Engine (diag.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT IS THIS & WHY DO WE NEED IT?
+ *   When a user writes an incorrect configuration (e.g., misspelled word,
+ *   type mismatch, or division by zero), the compiler must report:
+ *     1. The filename, line number, and column number
+ *     2. A clear error code (E101 for lexer, E201 for parser, etc.)
+ *     3. A visual caret underline (^^^^) pointing directly to the error
+ *   This file defines the diagnostic collector that records all errors.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_DIAG_H
@@ -14,10 +21,10 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-/** Maximum number of diagnostics reported before aborting. */
+/** Maximum number of errors reported before stopping compilation. */
 #define DIAG_MAX_REPORTS 50U
 
-/** Diagnostic severity levels. */
+/** Diagnostic severity: Error (stops code generation) or Warning. */
 typedef enum diag_severity {
     DIAG_SEV_ERROR = 0,
     DIAG_SEV_WARNING = 1

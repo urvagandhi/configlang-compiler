@@ -1,11 +1,24 @@
 /**
- * @file semantic.c
- * @brief Implementation of type checking, reference resolution, and cycle detection.
- * @module semantic
- * @phase Semantic Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Semantic Analyzer Implementation (semantic.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 6: Design and implementation of Semantic Analyzer
+ *     (Type Checking and Scope Verification).
+ *
+ * HOW SEMANTIC ANALYSIS OPERATES (Pass 2):
+ *   1. Type Checking (check_binary_type, check_expr_type):
+ *      Verifies operands are compatible (e.g. int + int -> int,
+ *      int + float -> float, string + string -> string).
+ *   2. Reference Checking (check_ref_type):
+ *      Resolves @path identifiers in the symbol table (E305 if missing).
+ *   3. Circular Dependency Detection (3-State DFS):
+ *      Uses STATE_UNVISITED -> STATE_VISITING -> STATE_DONE.
+ *      If we encounter a node already in STATE_VISITING, report E306 cycle error!
+ * ============================================================================
  */
 
 #include "semantic.h"

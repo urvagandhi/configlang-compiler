@@ -1,11 +1,21 @@
 /**
- * @file arena.h
- * @brief Arena (region-based) memory allocator for AST and symbol table.
- * @module arena
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Arena Memory Allocator (arena.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT IS THIS & WHY DO WE NEED IT?
+ *   A compiler creates thousands of small objects: AST nodes, tokens, and
+ *   symbol table entries.
+ *   - Normal approach: Calling malloc() and free() on every single node is
+ *     slow and prone to memory leaks if one node is forgotten.
+ *   - Arena approach: We allocate memory in large contiguous chunks (64 KB).
+ *     Every node takes a slice of the current chunk.
+ *   - At the end of compilation, arena_destroy() frees all chunks at once!
+ *   - Result: Fast compilation and GUARANTEED zero memory leaks (verified
+ *     with Valgrind).
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_ARENA_H
@@ -13,10 +23,10 @@
 
 #include <stddef.h>
 
-/** Default size for each arena block chunk (64 KB). */
+/** Default size for each memory chunk (64 KB). */
 #define ARENA_DEFAULT_CHUNK_SIZE (64U * 1024U)
 
-/** Opaque pointer to arena allocator instance. */
+/** Opaque pointer to the arena allocator instance. */
 typedef struct arena arena_t;
 
 /**

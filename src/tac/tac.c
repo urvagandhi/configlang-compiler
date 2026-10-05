@@ -1,11 +1,24 @@
 /**
- * @file tac.c
- * @brief Three-Address Code generation in dependency topological order.
- * @module tac
- * @phase Intermediate Code Generation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Three-Address Code Generator Implementation (tac.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 7: Design and implementation of Intermediate Code Generator
+ *     (Three Address Code) for given expressions.
+ *
+ * HOW TAC IS GENERATED HERE:
+ *   1. Variables are emitted in topological order (dependencies first).
+ *   2. tac_emit_expr() recursively decomposes an AST expression:
+ *      - Binary expressions emit an ADD/SUB/MUL/DIV instruction and return a
+ *        new temporary variable (t1, t2, ...).
+ *      - Unary negation emits a NEG instruction.
+ *      - Variable references emit a LOAD instruction.
+ *   3. Finally, a STORE instruction binds the final evaluated temporary
+ *      to the target variable name (e.g. STORE server.port, t1).
+ * ============================================================================
  */
 
 #include "tac.h"

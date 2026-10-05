@@ -1,11 +1,20 @@
 /**
- * @file symtab.h
- * @brief Symbol table with hash table lookup and ordered scope tree.
- * @module symtab
- * @phase Semantic Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Symbol Table Interface (symtab.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 3: Design and implementation of Symbol Table using
+ *     suitable data structures (Hash Table + Scope Tree).
+ *
+ * HOW THE SYMBOL TABLE IS DESIGNED:
+ *   1. Hash Table (1024 buckets): Provides O(1) average lookup for any
+ *      variable or block by its full canonical path (e.g., "server.port").
+ *   2. Scope Tree (n-ary tree): Tracks lexical scope hierarchy. Every block
+ *      knows its parent block and has a linked list of its child declarations.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_SYMTAB_H

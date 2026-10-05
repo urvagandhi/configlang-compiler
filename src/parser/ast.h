@@ -1,11 +1,21 @@
 /**
- * @file ast.h
- * @brief Abstract Syntax Tree data structures and operations.
- * @module ast
- * @phase Syntax Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Abstract Syntax Tree Data Structures (ast.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * WHAT IS AN ABSTRACT SYNTAX TREE (AST)?
+ *   After the parser recognizes tokens according to grammar rules, it builds
+ *   an in-memory tree representation of the program:
+ *     - AST_PROGRAM  : Top-level root holding a list of items
+ *     - AST_BLOCK    : Scope block with child items, e.g. server { ... }
+ *     - AST_DECL     : Variable declaration, e.g. port: int(1024..65535) = 8080;
+ *     - AST_BINARY   : Binary math expression (+, -, *, /)
+ *     - AST_UNARY    : Unary negation (-x)
+ *     - AST_REF      : Variable reference (@server.host)
+ *     - AST_LIT_*    : Literal values (integers, floats, strings, booleans)
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_AST_H

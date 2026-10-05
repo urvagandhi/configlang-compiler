@@ -1,22 +1,33 @@
 /**
- * @file symtab.c
- * @brief Implementation of symbol table hash lookups and scope tree management.
- * @module symtab
- * @phase Semantic Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Symbol Table Implementation (symtab.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 3: Design and implementation of Symbol Table using
+ *     suitable data structures (Hash Table + Scope Tree).
+ *
+ * CORE OPERATIONS IMPLEMENTED HERE:
+ *   1. symtab_hash()        : Computes bucket index using djb2 algorithm
+ *   2. symtab_lookup()      : Fast O(1) hash table lookup by dotted path
+ *   3. symtab_lookup_local(): Linear scan inside a block to check duplicates
+ *   4. symtab_insert()      : Adds new symbol to both scope tree & hash table
+ *   5. symtab_build_pass1() : Traverses AST to populate all symbols
+ * ============================================================================
  */
 
 #include "symtab.h"
 #include <inttypes.h>
 #include <string.h>
 
+/** Classic djb2 string hashing algorithm taught in compiler design courses */
 static uint32_t symtab_hash(const char *str) {
     uint32_t hash = 5381U;
     int c;
     while ((c = *str++) != 0) {
-        hash = ((hash << 5) + hash) + (uint32_t)c;
+        hash = ((hash << 5) + hash) + (uint32_t)c; /* hash * 33 + c */
     }
     return hash;
 }

@@ -1,11 +1,18 @@
 /**
- * @file lexer.h
- * @brief Token definitions and lexical analysis interface.
- * @module lexer
- * @phase Lexical Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Lexical Analyzer Interface (lexer.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 1 & 2: Design and implementation of Lexical Analyzer
+ *     using Lex / Flex.
+ *
+ * WHAT THIS FILE DOES:
+ *   Defines the token codes, scanner state structure, and public functions
+ *   used by the compiler driver to tokenize input files.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_LEXER_H
@@ -17,14 +24,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** Context passed into pure/reentrant scanner. */
+/** Scanner tracking state passed into Flex. */
 typedef struct lexer_extra {
-    diag_collector_t *diags;
-    arena_t *arena;
-    const char *filename;
-    size_t cur_line;
-    size_t cur_col;
-    diag_loc_t comment_start_loc;
+    diag_collector_t *diags;          /* Collector to record lexical errors (E101-E105) */
+    arena_t *arena;                   /* Arena allocator for token string memory */
+    const char *filename;             /* Name of source file being scanned */
+    size_t cur_line;                  /* Current line number in source text */
+    size_t cur_col;                   /* Current column number in source text */
+    diag_loc_t comment_start_loc;     /* Tracks start of block comment for E105 */
 } lexer_extra_t;
 
 /**

@@ -1,11 +1,18 @@
 /**
- * @file arena.c
- * @brief Arena memory allocator implementation with 8-byte alignment.
- * @module arena
- * @phase Common
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Arena Memory Allocator Implementation (arena.c)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * HOW IT WORKS IN 3 SIMPLE STEPS:
+ *   1. arena_create() allocates the first memory chunk (e.g. 64 KB).
+ *   2. arena_alloc() returns a pointer to the next free bytes inside the chunk.
+ *      If the current chunk runs out of space, it allocates a new chunk and
+ *      links it in a simple linked list.
+ *   3. arena_destroy() walks through the linked list and frees every chunk
+ *      at once when the compiler is done.
+ * ============================================================================
  */
 
 #include "arena.h"
@@ -14,33 +21,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** Byte alignment requirement for all arena allocations. */
+/** Byte alignment (8 bytes) so 64-bit ints and pointers are properly aligned */
 #define ARENA_ALIGNMENT 8U
 
-/**
- * @brief Linked list chunk of arena memory.
- */
+/** A single memory block (chunk) in our linked list */
 typedef struct arena_chunk {
-    struct arena_chunk *next; /**< Pointer to subsequent chunk. */
-    size_t capacity;          /**< Total capacity of this chunk. */
-    size_t offset;            /**< Current allocation offset. */
-    char *data;               /**< Pointer to payload data buffer. */
+    struct arena_chunk *next; /* Next memory chunk in list */
+    size_t capacity;          /* Total size of this chunk in bytes */
+    size_t offset;            /* How many bytes are currently used */
+    char *data;               /* The actual memory buffer */
 } arena_chunk_t;
 
-/**
- * @brief Arena allocator state structure.
- */
+/** Arena manager keeping track of the chunk linked list */
 struct arena {
-    arena_chunk_t *head;      /**< Head of chunk linked list. */
-    arena_chunk_t *current;   /**< Currently active chunk for new allocations. */
-    size_t default_chunk_sz;  /**< Configured default chunk size. */
+    arena_chunk_t *head;      /* First chunk in the list */
+    arena_chunk_t *current;   /* Chunk currently being allocated from */
+    size_t default_chunk_sz;  /* Default chunk size (64 KB) */
 };
 
-/**
- * @brief Helper to allocate a new arena chunk.
- * @param capacity Minimum byte capacity for chunk.
- * @return Freshly allocated and zero-initialized chunk.
- */
+/** Create a new memory chunk of specified capacity */
 static arena_chunk_t *arena_chunk_create(size_t capacity) {
     arena_chunk_t *chunk = (arena_chunk_t *)util_xmalloc(sizeof(arena_chunk_t));
     chunk->next = NULL;
@@ -50,6 +49,7 @@ static arena_chunk_t *arena_chunk_create(size_t capacity) {
     return chunk;
 }
 
+/** Initialize a new arena memory pool */
 arena_t *arena_create(size_t chunk_size) {
     arena_t *arena = (arena_t *)util_xmalloc(sizeof(arena_t));
     arena->default_chunk_sz = (chunk_size > 0) ? chunk_size : ARENA_DEFAULT_CHUNK_SIZE;

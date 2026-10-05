@@ -1,12 +1,22 @@
 %{
 /**
- * @file lexer.l
- * @brief Flex lexical analyzer for ConfigLang.
- * @module lexer
- * @phase Lexical Analysis
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Flex Lexical Analyzer (lexer.l)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 1 & 2: Design and implementation of Lexical Analyzer
+ *     using Lex / Flex.
+ *
+ * HOW FLEX WORKS IN THIS COMPILER:
+ *   1. Reads input character-by-character from the source buffer.
+ *   2. Matches Regular Expressions (IDENT, INT_LIT, FLOAT_LIT, keywords).
+ *   3. Packages matched values into tokens (yylval) with source location (yylloc).
+ *   4. Returns token codes (e.g. KW_INT, STRING_LIT) to the Bison Parser.
+ *   5. Emits diagnostics E101-E105 on lexical errors (illegal chars, unclosed strings).
+ * ============================================================================
  */
 
 #define _POSIX_C_SOURCE 200809L

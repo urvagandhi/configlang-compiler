@@ -1,11 +1,17 @@
 /**
- * @file codegen.h
- * @brief Code generator interface for standard JSON and YAML configuration output.
- * @module codegen
- * @phase Code Generation
- *
- * Course: PCD (Compiler Design), 4CS501CC25
+ * ============================================================================
+ * Target Code Generator Interface (codegen.h)
+ * ============================================================================
+ * Course: Principles of Compiler Design (4CS501CC25) - Nirma University
  * Authors: Urva Gandhi (23BCE078) & Rakshit Gajnotar (23BCE077)
+ *
+ * SYLLABUS MAPPING:
+ *   - Experiment 8: Design and implementation of Code Generator for target
+ *     machine / target format (JSON and YAML).
+ *
+ * WHAT THIS FILE DOES:
+ *   Takes the evaluated symbols and emits valid JSON or YAML configurations.
+ * ============================================================================
  */
 
 #ifndef CONFIGLANG_CODEGEN_H
