@@ -160,6 +160,10 @@ int main(int argc, char **argv) {
     }
 
     int folds = optimize_tac();
+    if (folds < 0) {
+        fprintf(stderr, "Compilation aborted with arithmetic error.\n");
+        return 1;
+    }
 
     if (show_phases) {
         printf("Optimized TAC (%d constants folded at compile time):\n", folds);

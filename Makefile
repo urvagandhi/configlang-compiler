@@ -11,7 +11,7 @@ SRCS = src/parser/ast.c src/symtab/symtab.c src/semantic/semantic.c \
        src/tac/tac.c src/optimizer/optimizer.c src/codegen/codegen.c src/main.c
 OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS)) $(BUILD_DIR)/parser.tab.o $(BUILD_DIR)/lex.yy.o
 
-.PHONY: all clean test demo directories
+.PHONY: all clean test demo showcase directories
 
 all: directories $(BIN)
 
@@ -44,6 +44,9 @@ demo: $(BIN)
 test: $(BIN)
 	@echo "=== Running Student Test Suite ==="
 	@bash tests/run_tests.sh
+
+showcase: $(BIN)
+	@bash tests/showcase/run_showcase.sh
 
 clean:
 	rm -rf $(BUILD_DIR)

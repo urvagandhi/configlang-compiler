@@ -67,6 +67,11 @@ assert_exit "$BIN tests/invalid/sem_undefined_ref.cfg" 1 "Catch semantic error (
 assert_exit "$BIN tests/invalid/sem_type_mismatch.cfg" 1 "Catch semantic error (type mismatch)"
 assert_exit "$BIN tests/invalid/sem_duplicate.cfg" 1 "Catch semantic error (duplicate variable)"
 assert_exit "$BIN tests/invalid/sem_cycle_self.cfg" 1 "Catch semantic error (circular reference)"
+assert_exit "$BIN tests/invalid/opt_div_zero.cfg" 1 "Catch division by zero (integer 1 / 0)"
+assert_exit "$BIN tests/invalid/opt_div_zero_float.cfg" 1 "Catch division by zero (float 1.0 / 0.0)"
+assert_exit "$BIN tests/invalid/opt_div_zero_complex.cfg" 1 "Catch complex division by zero (@val / (5 - 5))"
+assert_exit "$BIN tests/invalid/opt_div_zero_nested.cfg" 1 "Catch nested block division by zero (8 / (@workers - 4))"
+assert_exit "$BIN tests/invalid/opt_div_zero_expr.cfg" 1 "Catch arithmetic expression division by zero (8 / (10 - 2 * 5))"
 
 echo ""
 echo "=========================================================="

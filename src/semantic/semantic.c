@@ -92,6 +92,14 @@ static DataType check_expr_type(ASTNode *expr, const char *current_var) {
 
             /* Numeric operations */
             if ((lt == TYPE_INT || lt == TYPE_FLOAT) && (rt == TYPE_INT || rt == TYPE_FLOAT)) {
+                if (expr->op == '/') {
+                    if ((expr->right->type == NODE_INT && expr->right->ival == 0) ||
+                        (expr->right->type == NODE_FLOAT && expr->right->fval == 0.0)) {
+                        fprintf(stderr, "Semantic Error at line %d: Division by zero\n", expr->line);
+                        sem_errors++;
+                        return TYPE_UNKNOWN;
+                    }
+                }
                 if (lt == TYPE_FLOAT || rt == TYPE_FLOAT) return TYPE_FLOAT;
                 return TYPE_INT;
             }

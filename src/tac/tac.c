@@ -33,13 +33,14 @@ char *tac_new_temp(void) {
     return strdup(buf);
 }
 
-void tac_emit(const char *op, const char *arg1, const char *arg2, const char *result) {
+void tac_emit(const char *op, const char *arg1, const char *arg2, const char *result, int line) {
     TAC *t = (TAC *)malloc(sizeof(TAC));
     memset(t, 0, sizeof(TAC));
     strncpy(t->op, op, sizeof(t->op) - 1);
     if (arg1) strncpy(t->arg1, arg1, sizeof(t->arg1) - 1);
     if (arg2) strncpy(t->arg2, arg2, sizeof(t->arg2) - 1);
     if (result) strncpy(t->result, result, sizeof(t->result) - 1);
+    t->line = line;
     t->next = NULL;
 
     if (!tac_head) {
@@ -53,6 +54,10 @@ void tac_emit(const char *op, const char *arg1, const char *arg2, const char *re
 
 TAC *tac_get_head(void) {
     return tac_head;
+}
+
+void tac_set_head(TAC *head) {
+    tac_head = head;
 }
 
 static char *tac_gen_expr(ASTNode *expr) {
@@ -77,7 +82,7 @@ static char *tac_gen_expr(ASTNode *expr) {
 
         case NODE_REF: {
             char *temp = tac_new_temp();
-            tac_emit("LOAD", expr->name, "", temp);
+            tac_emit("LOAD", expr->name, "", temp, expr->line);
             return temp;
         }
 
@@ -91,7 +96,7 @@ static char *tac_gen_expr(ASTNode *expr) {
             else if (expr->op == '*') op_name = "MUL";
             else if (expr->op == '/') op_name = "DIV";
 
-            tac_emit(op_name, left, right, temp);
+            tac_emit(op_name, left, right, temp, expr->line);
             return temp;
         }
 
@@ -120,7 +125,7 @@ void tac_generate(ASTNode *node, const char *prefix) {
         }
 
         char *val = tac_gen_expr(node->left);
-        tac_emit("STORE", val, "", full_name);
+        tac_emit("STORE", val, "", full_name, node->line);
     }
 
     if (node->next) {

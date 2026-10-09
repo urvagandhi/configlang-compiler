@@ -1,0 +1,16 @@
+{
+  "app_name": "ConfigLang Demo",
+  "base_port": 8000,
+  "server": {
+    "port": 8080,
+    "workers": 4,
+    "timeout_ms": 30000,
+    "max_connections": 1000,
+    "debug": false
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "url": "postgres://localhost/app"
+  }
+}
